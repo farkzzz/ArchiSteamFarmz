@@ -42,7 +42,7 @@ namespace ArchiSteamFarm {
 		internal bool Debug { get; private set; } = false;
 
 		[JsonProperty(Required = Required.DisallowNull)]
-		internal bool AutoUpdates { get; private set; } = true;
+		internal bool AutoUpdates { get; private set; } = false;
 
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal EUpdateChannel UpdateChannel { get; private set; } = EUpdateChannel.Stable;
@@ -84,7 +84,7 @@ namespace ArchiSteamFarm {
 		internal bool LogToFile { get; private set; } = true;
 
 		[JsonProperty(Required = Required.DisallowNull)]
-		internal bool Statistics { get; private set; } = true;
+		internal bool Statistics { get; private set; } = false;
 
 		// TODO: Please remove me immediately after https://github.com/SteamRE/SteamKit/issues/254 gets fixed
 		[JsonProperty(Required = Required.DisallowNull)]
