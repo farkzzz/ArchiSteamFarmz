@@ -259,8 +259,44 @@ namespace ArchiSteamFarm {
 
 			return result;
 		}
+        internal async Task<bool> AcceptGift(ulong gid)
+        {
+            if (gid == 0)
+            {
+                return false;
+            }
 
-		internal async Task<bool> JoinClan(ulong clanID) {
+            string sessionID;
+            if (!Cookie.TryGetValue("sessionid", out sessionID))
+            {
+                return false;
+            }
+            if (string.IsNullOrEmpty(sessionID))
+            {
+                Logging.LogNullError("sessionID");
+                return false;
+            }
+
+            string request = SteamCommunityURL + "/gifts/" + gid + "/acceptunpack";
+            Dictionary<string, string> data = new Dictionary<string, string>(1) {
+                { "sessionid", sessionID }
+            };
+
+            HttpResponseMessage response = null;
+            for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++)
+            {
+                response = await WebBrowser.UrlPost(request, data, Cookie).ConfigureAwait(false);
+            }
+
+            if (response == null)
+            {
+                Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
+                return false;
+            }
+
+            return true;
+        }
+        internal async Task<bool> JoinClan(ulong clanID) {
 			if (clanID == 0) {
 				return false;
 			}

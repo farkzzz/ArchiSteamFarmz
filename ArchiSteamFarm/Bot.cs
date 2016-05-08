@@ -206,8 +206,9 @@ namespace ArchiSteamFarm {
 
 			SteamApps = SteamClient.GetHandler<SteamApps>();
 			CallbackManager.Subscribe<SteamApps.FreeLicenseCallback>(OnFreeLicense);
+            CallbackManager.Subscribe<SteamApps.GuestPassListCallback>(OnGuestPassList);
 
-			SteamFriends = SteamClient.GetHandler<SteamFriends>();
+            SteamFriends = SteamClient.GetHandler<SteamFriends>();
 			CallbackManager.Subscribe<SteamFriends.ChatInviteCallback>(OnChatInvite);
 			CallbackManager.Subscribe<SteamFriends.ChatMsgCallback>(OnChatMsg);
 			CallbackManager.Subscribe<SteamFriends.FriendsListCallback>(OnFriendsList);
@@ -1366,7 +1367,40 @@ namespace ArchiSteamFarm {
 			}
 		}
 
-		private void OnChatInvite(SteamFriends.ChatInviteCallback callback) {
+        private async void OnGuestPassList(SteamApps.GuestPassListCallback callback)
+        {
+            if (callback == null || callback.Result != EResult.OK || callback.CountGuestPassesToRedeem == 0 || callback.GuestPasses.Count == 0 || !BotConfig.AcceptGifts)
+            {
+                return;
+            }
+
+            bool acceptedSomething = false;
+            foreach (KeyValue guestPass in callback.GuestPasses)
+            {
+                ulong gid = guestPass["gid"].AsUnsignedLong();
+                if (gid == 0)
+                {
+                    continue;
+                }
+
+                Logging.LogGenericInfo("Accepting gift: " + gid + "...", BotName);
+                if (await ArchiWebHandler.AcceptGift(gid).ConfigureAwait(false))
+                {
+                    acceptedSomething = true;
+                    Logging.LogGenericInfo("Success!", BotName);
+                }
+                else {
+                    Logging.LogGenericInfo("Failed!", BotName);
+                }
+            }
+
+            if (acceptedSomething)
+            {
+                CardsFarmer.RestartFarming().Forget();
+            }
+        }
+
+        private void OnChatInvite(SteamFriends.ChatInviteCallback callback) {
 			if (callback == null) {
 				return;
 			}
