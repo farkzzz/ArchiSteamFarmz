@@ -7,7 +7,7 @@
   "IdleFarmingPeriod": 3,
   "FarmingDelay": 5,
   "AccountPlayingDelay": 5,
-  "LoginLimiterDelay": 7,
+  "LoginLimiterDelay": 20,
   "InventoryLimiterDelay": 3,
   "ForceHttp": false,
   "HttpTimeout": 60,

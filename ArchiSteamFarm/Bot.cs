@@ -351,8 +351,6 @@ namespace ArchiSteamFarm {
 						return ResponseStatusAll(steamID);
 					case "!stop":
 						return await ResponseStop(steamID).ConfigureAwait(false);
-					case "!update":
-						return await ResponseUpdate(steamID).ConfigureAwait(false);
 					default:
 						return "Unrecognized command: " + message;
 				}
@@ -1146,20 +1144,7 @@ namespace ArchiSteamFarm {
 
 			return await bot.ResponseStop(steamID).ConfigureAwait(false);
 		}
-
-		private static async Task<string> ResponseUpdate(ulong steamID) {
-			if (steamID == 0) {
-				return null;
-			}
-
-			if (!IsOwner(steamID)) {
-				return "ERROR: Not authorized!";
-			}
-
-			await Program.CheckForUpdate().ConfigureAwait(false);
-			return "Done!";
-		}
-
+        
 		private void HandleCallbacks() {
 			TimeSpan timeSpan = TimeSpan.FromMilliseconds(CallbackSleep);
 			while (KeepRunning || SteamClient.IsConnected) {
