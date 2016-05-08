@@ -1311,7 +1311,8 @@ namespace ArchiSteamFarm {
 					LoginKey = BotDatabase.LoginKey,
 					TwoFactorCode = TwoFactorAuth,
 					SentryFileHash = sentryHash,
-					ShouldRememberPassword = true
+					ShouldRememberPassword = true,
+                    CellID = BotConfig.CellId == 0 ? Program.GlobalDatabase.CellID : BotConfig.CellId
 				});
 				return;
 			}
@@ -1324,8 +1325,9 @@ namespace ArchiSteamFarm {
 				LoginKey = BotDatabase.LoginKey,
 				TwoFactorCode = TwoFactorAuth,
 				SentryFileHash = sentryHash,
-				ShouldRememberPassword = true
-			});
+				ShouldRememberPassword = true,
+                CellID = BotConfig.CellId == 0 ? Program.GlobalDatabase.CellID : BotConfig.CellId
+            });
 		}
 
 		private async void OnDisconnected(SteamClient.DisconnectedCallback callback) {
@@ -1574,7 +1576,7 @@ namespace ArchiSteamFarm {
 				case EResult.OK:
 					Logging.LogGenericInfo("Successfully logged on!", BotName);
 
-					if (callback.CellID != 0) {
+					if (BotConfig.CellId != callback.CellID) {
 						Program.GlobalDatabase.CellID = callback.CellID;
 					}
 
