@@ -1297,7 +1297,7 @@ namespace ArchiSteamFarm {
 					TwoFactorCode = TwoFactorAuth,
 					SentryFileHash = sentryHash,
 					ShouldRememberPassword = true,
-                    CellID = BotConfig.CellId == 0 ? Program.GlobalDatabase.CellID : BotConfig.CellId
+                    CellID = Program.GlobalDatabase.CellID
 				});
 				return;
 			}
@@ -1311,7 +1311,7 @@ namespace ArchiSteamFarm {
 				TwoFactorCode = TwoFactorAuth,
 				SentryFileHash = sentryHash,
 				ShouldRememberPassword = true,
-                CellID = BotConfig.CellId == 0 ? Program.GlobalDatabase.CellID : BotConfig.CellId
+                CellID = Program.GlobalDatabase.CellID
             });
 		}
 
@@ -1561,7 +1561,7 @@ namespace ArchiSteamFarm {
 				case EResult.OK:
 					Logging.LogGenericInfo("Successfully logged on!", BotName);
 
-					if (BotConfig.CellId != callback.CellID) {
+					if (callback.CellID != 0) {
 						Program.GlobalDatabase.CellID = callback.CellID;
 					}
 

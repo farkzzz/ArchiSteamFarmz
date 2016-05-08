@@ -41,10 +41,7 @@ namespace ArchiSteamFarm {
 
 		[JsonProperty]
 		internal string SteamPassword { get; set; } = null;
-
-        [JsonProperty]
-        internal byte CellId { get; set; } = 0;
-
+        
         [JsonProperty]
         internal string SteamParentalPIN { get; set; } = "0";
 
