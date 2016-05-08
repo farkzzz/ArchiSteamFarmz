@@ -241,7 +241,7 @@ namespace ArchiSteamFarm {
 
 			if (BotConfig.SendTradePeriod > 0 && SendItemsTimer == null) {
 				SendItemsTimer = new Timer(
-					async e => await ResponseSendTrade(BotConfig.SteamMasterID).ConfigureAwait(false),
+					async e => await ResponseLoot(BotConfig.SteamMasterID).ConfigureAwait(false),
 					null,
 					TimeSpan.FromHours(BotConfig.SendTradePeriod), // Delay
 					TimeSpan.FromHours(BotConfig.SendTradePeriod) // Period
@@ -311,7 +311,7 @@ namespace ArchiSteamFarm {
 
 		internal async Task OnFarmingFinished(bool farmedSomething) {
 			if (farmedSomething && BotConfig.SendOnFarmingFinished) {
-				await ResponseSendTrade(BotConfig.SteamMasterID).ConfigureAwait(false);
+				await ResponseLoot(BotConfig.SteamMasterID).ConfigureAwait(false);
 			}
 			if (BotConfig.ShutdownOnFarmingFinished) {
 				await Shutdown().ConfigureAwait(false);
@@ -319,7 +319,7 @@ namespace ArchiSteamFarm {
 		}
 
 		internal async Task<string> Response(ulong steamID, string message) {
-			if (steamID == 0 || string.IsNullOrEmpty(message)) {
+			if (steamID != BotConfig.SteamMasterID || string.IsNullOrEmpty(message)) {
 				return null;
 			}
 
@@ -340,7 +340,7 @@ namespace ArchiSteamFarm {
 					case "!farm":
 						return await ResponseFarm(steamID).ConfigureAwait(false);
 					case "!loot":
-						return await ResponseSendTrade(steamID).ConfigureAwait(false);
+						return await ResponseLoot(steamID).ConfigureAwait(false);
 					case "!rejoinchat":
 						return ResponseRejoinChat(steamID);
 					case "!restart":
@@ -374,7 +374,7 @@ namespace ArchiSteamFarm {
 					case "!farm":
 						return await ResponseFarm(steamID, args[1]).ConfigureAwait(false);
 					case "!loot":
-						return await ResponseSendTrade(steamID, args[1]).ConfigureAwait(false);
+						return await ResponseLoot(steamID, args[1]).ConfigureAwait(false);
 					case "!owns":
 						if (args.Length > 2) {
 							return await ResponseOwns(steamID, args[1], args[2]).ConfigureAwait(false);
@@ -560,35 +560,44 @@ namespace ArchiSteamFarm {
 			return result.ToString();
 		}
 
-		private async Task<string> ResponseSendTrade(ulong steamID) {
-			if (steamID == 0) {
-				return null;
-			}
+        private async Task<string> ResponseLoot(ulong steamID) {
+            if (steamID == 0) {
+                return null;
+            }
 
-			if (!IsMaster(steamID)) {
-				return "ERROR: Not authorized!";
-			}
+            if (!IsMaster(steamID)) {
+                return "ERROR: Not authorized!";
+            }
 
-			if (BotConfig.SteamMasterID == 0) {
-				return "Trade couldn't be send because SteamMasterID is not defined!";
-			}
+            if (BotConfig.SteamMasterID == 0) {
+                return "Trade couldn't be send because SteamMasterID is not defined!";
+            }
 
-			await Trading.LimitInventoryRequestsAsync().ConfigureAwait(false);
-			List<Steam.Item> inventory = await ArchiWebHandler.GetMyTradableInventory().ConfigureAwait(false);
+            await Trading.LimitInventoryRequestsAsync().ConfigureAwait(false);
+            List<Steam.Item> inventory = await ArchiWebHandler.GetMyTradableInventory().ConfigureAwait(false);
+            List<ulong> gifts = await ArchiWebHandler.GetMyGifts().ConfigureAwait(false);
+            var count = 0;
+            if (gifts != null && gifts.Count != 0)
+            { 
+                foreach (var gid in gifts)
+                {
+                    await ArchiWebHandler.SendGift(BotConfig.SteamMasterID, gid).ConfigureAwait(false);
+                    count++;
+                }
 
-			if (inventory == null || inventory.Count == 0) {
-				return "Nothing to send, inventory seems empty!";
-			}
+            }
+            if (inventory != null && inventory.Count != 0)
+            {
+                if (await ArchiWebHandler.SendTradeOffer(inventory, BotConfig.SteamMasterID, BotConfig.SteamTradeToken).ConfigureAwait(false))
+                {
+                    await AcceptConfirmations(Confirmation.ConfirmationType.Trade).ConfigureAwait(false);
+                    count += Math.Min(inventory.Count, 20);
+                }
+            }
+            return "Items were sent: " + count + "!";
+        }
 
-			if (await ArchiWebHandler.SendTradeOffer(inventory, BotConfig.SteamMasterID, BotConfig.SteamTradeToken).ConfigureAwait(false)) {
-				await AcceptConfirmations(Confirmation.ConfirmationType.Trade).ConfigureAwait(false);
-				return "Trade offer sent successfully!";
-			} else {
-				return "Trade offer failed due to error!";
-			}
-		}
-
-		private static async Task<string> ResponseSendTrade(ulong steamID, string botName) {
+		private static async Task<string> ResponseLoot(ulong steamID, string botName) {
 			if (steamID == 0 || string.IsNullOrEmpty(botName)) {
 				return null;
 			}
@@ -598,7 +607,7 @@ namespace ArchiSteamFarm {
 				return "Couldn't find any bot named " + botName + "!";
 			}
 
-			return await bot.ResponseSendTrade(steamID).ConfigureAwait(false);
+			return await bot.ResponseLoot(steamID).ConfigureAwait(false);
 		}
 
 		private string Response2FA(ulong steamID) {
@@ -1384,10 +1393,17 @@ namespace ArchiSteamFarm {
                 }
 
                 Logging.LogGenericInfo("Accepting gift: " + gid + "...", BotName);
-                if (await ArchiWebHandler.AcceptGift(gid).ConfigureAwait(false))
-                {
-                    acceptedSomething = true;
-                    Logging.LogGenericInfo("Success!", BotName);
+                var acceptResult = await ArchiWebHandler.AcceptGift(gid).ConfigureAwait(false);
+                if (acceptResult > 0)
+                {                                    
+                    if (acceptResult > 1 && BotConfig.SteamMasterID != 0)
+                    {
+                        Logging.LogGenericInfo("Gift added in invenetory "+ acceptResult + "!", BotName);
+                    } else
+                    {
+                        acceptedSomething = true;
+                        Logging.LogGenericInfo("Success!", BotName);
+                    }
                 }
                 else {
                     Logging.LogGenericInfo("Failed!", BotName);

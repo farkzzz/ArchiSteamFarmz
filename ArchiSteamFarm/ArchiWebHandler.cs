@@ -259,7 +259,48 @@ namespace ArchiSteamFarm {
 
 			return result;
 		}
-        internal async Task<bool> AcceptGift(ulong gid)
+        internal async Task<ulong> AcceptGift(ulong gid)
+        {
+            if (gid == 0)
+            {
+                return 0;
+            }
+
+            string sessionID;
+            if (!Cookie.TryGetValue("sessionid", out sessionID))
+            {
+                return 0;
+            }
+            if (string.IsNullOrEmpty(sessionID))
+            {
+                Logging.LogNullError("sessionID");
+                return 0;
+            }
+
+            string request = SteamCommunityURL + "/gifts/" + gid + "/acceptunpack";
+            Dictionary<string, string> data = new Dictionary<string, string>(1) {
+                { "sessionid", sessionID }
+            };
+
+            HttpResponseMessage response = null;
+            for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++)
+            {
+                response = await WebBrowser.UrlPost(request, data, Cookie).ConfigureAwait(false);
+            }
+
+            if (response == null)
+            {
+                Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
+                return 0;
+            }          
+            JObject objResponse = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            if (objResponse["gidgiftnew"] != null)
+            {
+                return UInt64.Parse(objResponse["gidgiftnew"].ToString());
+            }
+            return 1;
+        }
+        internal async Task<bool> SendGift(ulong recipientID, ulong gid)
         {
             if (gid == 0)
             {
@@ -276,10 +317,18 @@ namespace ArchiSteamFarm {
                 Logging.LogNullError("sessionID");
                 return false;
             }
-
-            string request = SteamCommunityURL + "/gifts/" + gid + "/acceptunpack";
-            Dictionary<string, string> data = new Dictionary<string, string>(1) {
-                { "sessionid", sessionID }
+            var recipientID3 = new SteamID();
+            recipientID3.SetFromUInt64(recipientID);
+            string request = "https://store.steampowered.com/checkout/sendgiftsubmit/";
+            Dictionary<string, string> data = new Dictionary<string, string>(2) {
+                {"GifteeAccountID", recipientID3.AccountID.ToString()},
+                {"GifteeEmail", "add_to_cart"},
+                {"GifteeName", "master"},
+                {"GiftMessage", "Sent by ASF"},
+                {"GiftSentiment", ""},
+                {"GiftSignature", "ASF"},
+                {"GiftGID", gid.ToString()},
+                {"SessionID", sessionID}
             };
 
             HttpResponseMessage response = null;
@@ -388,36 +437,87 @@ namespace ArchiSteamFarm {
 			return true;
 		}
 
-		internal async Task<List<Steam.Item>> GetMyTradableInventory() {
-			JObject jObject = null;
-			for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++) {
-				jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/753/6?trading=1", Cookie).ConfigureAwait(false);
-			}
+        internal async Task<List<Steam.Item>> GetMyTradableInventory()
+        {
+            List<Steam.Item> result = new List<Steam.Item>();
+            string[] appList = { "753/6", "730/2" };
+            foreach (var app in appList)
+            {
+                JObject jObject = null;
+                for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++)
+                {
+                    jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/"+app+"/?trading=1", Cookie).ConfigureAwait(false);
+                }
 
-			if (jObject == null) {
-				Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
-				return null;
-			}
+                if (jObject == null)
+                {
+                    Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
+                    return null;
+                }
 
-			IEnumerable<JToken> jTokens = jObject.SelectTokens("$.rgInventory.*");
-			if (jTokens == null) {
-				Logging.LogNullError("jTokens", Bot.BotName);
-				return null;
-			}
+                IEnumerable<JToken> jTokens = jObject.SelectTokens("$.rgInventory.*");
+                if (jTokens == null)
+                {
+                    Logging.LogNullError("jTokens", Bot.BotName);
+                    return null;
+                }
 
-			List<Steam.Item> result = new List<Steam.Item>();
-			foreach (JToken jToken in jTokens) {
-				try {
-					result.Add(JsonConvert.DeserializeObject<Steam.Item>(jToken.ToString()));
-				} catch (Exception e) {
-					Logging.LogGenericException(e, Bot.BotName);
-				}
-			}
+                foreach (JToken jToken in jTokens)
+                {
+                    try
+                    {
+                        var item = JsonConvert.DeserializeObject<Steam.Item>(jToken.ToString());
+                        item.appid = app.Split('/')[0];
+                        item.contextid = app.Split('/')[1];
+                        result.Add(item);
+                    }
+                    catch (Exception e)
+                    {
+                        Logging.LogGenericException(e, Bot.BotName);
+                    }
+                }
+            }
 
-			return result;
-		}
+            return result;
+        }
+        internal async Task<List<ulong>> GetMyGifts()
+        {
+            JObject jObject = null;
+            for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++)
+            {
+                jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/753/1", Cookie).ConfigureAwait(false);
+            }
 
-		internal async Task<bool> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
+            if (jObject == null)
+            {
+                Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
+                return null;
+            }
+
+            IEnumerable<JToken> jTokens = jObject.SelectTokens("$.rgInventory.*");
+            if (jTokens == null)
+            {
+                Logging.LogNullError("jTokens", Bot.BotName);
+                return null;
+            }
+
+            var result = new List<ulong>();
+            foreach (JToken jToken in jTokens)
+            {
+                try
+                {
+                    result.Add(UInt64.Parse(jToken.SelectToken("id").ToString()));
+                }
+                catch (Exception e)
+                {
+                    Logging.LogGenericException(e, Bot.BotName);
+                }
+            }
+
+            return result;
+        }
+
+        internal async Task<bool> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
 			if (inventory == null || inventory.Count == 0 || partnerID == 0) {
 				return false;
 			}
@@ -442,8 +542,8 @@ namespace ArchiSteamFarm {
 
 				Steam.Item item = inventory[i];
 				singleTrade.me.assets.Add(new Steam.Item() {
-					appid = "753",
-					contextid = "6",
+					appid = item.appid,
+					contextid = item.contextid,
 					amount = item.amount,
 					assetid = item.id
 				});
