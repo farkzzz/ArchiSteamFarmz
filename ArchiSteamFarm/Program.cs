@@ -61,8 +61,6 @@ namespace ArchiSteamFarm {
 		internal const string GlobalConfigFile = ASF + ".json";
 		internal const string GlobalDatabaseFile = ASF + ".db";
 
-		private const string GithubReleaseURL = "https://api.github.com/repos/JustArchi/ArchiSteamFarm/releases"; // GitHub API is HTTPS only
-
 		private static readonly Assembly Assembly = Assembly.GetExecutingAssembly();
 		internal static readonly Version Version = Assembly.GetName().Version;
 
@@ -77,8 +75,7 @@ namespace ArchiSteamFarm {
 		internal static GlobalConfig GlobalConfig { get; private set; }
 		internal static GlobalDatabase GlobalDatabase { get; private set; }
 		internal static bool ConsoleIsBusy { get; private set; } = false;
-
-		private static Timer AutoUpdatesTimer;
+		
 		private static EMode Mode = EMode.Normal;
 
 		internal static void Exit(int exitCode = 0) {

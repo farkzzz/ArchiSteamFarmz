@@ -29,11 +29,6 @@ using System.IO;
 
 namespace ArchiSteamFarm {
 	internal sealed class GlobalConfig {
-		internal enum EUpdateChannel : byte {
-			Unknown,
-			Stable,
-			Experimental
-		}
 
 		// This is hardcoded blacklist which should not be possible to change
 		internal static readonly HashSet<uint> GlobalBlacklist = new HashSet<uint> { 267420, 303700, 335590, 368020, 425280 };
@@ -43,9 +38,6 @@ namespace ArchiSteamFarm {
 
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal bool AutoUpdates { get; private set; } = false;
-
-		[JsonProperty(Required = Required.DisallowNull)]
-		internal EUpdateChannel UpdateChannel { get; private set; } = EUpdateChannel.Stable;
 
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal ulong SteamOwnerID { get; private set; } = 0;

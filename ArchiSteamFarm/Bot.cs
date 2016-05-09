@@ -319,7 +319,7 @@ namespace ArchiSteamFarm {
 		}
 
 		internal async Task<string> Response(ulong steamID, string message) {
-			if (steamID != BotConfig.SteamMasterID || string.IsNullOrEmpty(message)) {
+            if (!IsMaster(steamID) || string.IsNullOrEmpty(message)) {
 				return null;
 			}
 
@@ -1152,12 +1152,12 @@ namespace ArchiSteamFarm {
 			}
 		}
 
-		private async Task HandleMessage(ulong steamID, string message) {
+		private async Task HandleMessage(ulong steamID, ulong senderID, string message) {
 			if (steamID == 0 || string.IsNullOrEmpty(message)) {
 				return;
 			}
 
-			SendMessage(steamID, await Response(steamID, message).ConfigureAwait(false));
+			SendMessage(steamID, await Response(senderID, message).ConfigureAwait(false));
 		}
 
 		private void SendMessage(ulong steamID, string message) {
@@ -1433,7 +1433,7 @@ namespace ArchiSteamFarm {
 					SteamFriends.LeaveChat(callback.ChatRoomID);
 					break;
 				default:
-					await HandleMessage(callback.ChatRoomID, callback.Message).ConfigureAwait(false);
+					await HandleMessage(callback.ChatRoomID, callback.ChatterID, callback.Message).ConfigureAwait(false);
 					break;
 			}
 		}
@@ -1475,7 +1475,7 @@ namespace ArchiSteamFarm {
 				return;
 			}
 
-			await HandleMessage(callback.Sender, callback.Message).ConfigureAwait(false);
+			await HandleMessage(callback.Sender, callback.Sender, callback.Message).ConfigureAwait(false);
 		}
 
 		private async void OnFriendMsgHistory(SteamFriends.FriendMsgHistoryCallback callback) {
@@ -1509,7 +1509,7 @@ namespace ArchiSteamFarm {
 			}
 
 			// Handle the message
-			await HandleMessage(callback.SteamID, lastMessage.Message).ConfigureAwait(false);
+			await HandleMessage(callback.SteamID, callback.SteamID, lastMessage.Message).ConfigureAwait(false);
 		}
 
 		private void OnAccountInfo(SteamUser.AccountInfoCallback callback) {
