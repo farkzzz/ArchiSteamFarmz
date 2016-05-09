@@ -36,7 +36,6 @@ using System.Text;
 
 namespace ArchiSteamFarm {
 	internal sealed class Bot {
-		private const ulong ArchiSCFarmGroup = 103582791440160998;
 		private const ushort CallbackSleep = 500; // In miliseconds
 
 		internal static readonly Dictionary<string, Bot> Bots = new Dictionary<string, Bot>();
@@ -66,6 +65,8 @@ namespace ArchiSteamFarm {
 		private bool InvalidPassword = false;
 		private bool LoggedInElsewhere = false;
 		private string AuthCode, TwoFactorAuth;
+
+		private ArchiWebHandler.EClanRank rank;
 
 		internal static async Task RefreshCMs(uint cellID) {
 			bool initialized = false;
@@ -347,6 +348,8 @@ namespace ArchiSteamFarm {
 						return ResponseRestart(steamID);
 					case "!status":
 						return ResponseStatus(steamID);
+					case "!rank":
+						return ResponseRank( steamID );
 					case "!statusall":
 						return ResponseStatusAll(steamID);
 					case "!stop":
@@ -359,6 +362,8 @@ namespace ArchiSteamFarm {
 				switch (args[0]) {
 					case "!2fa":
 						return Response2FA(steamID, args[1]);
+					case "!rank":
+						return await ResponseRank( steamID, args[1] ).ConfigureAwait(false);
 					case "!2faoff":
 						return Response2FAOff(steamID, args[1]);
 					case "!2faok":
@@ -518,6 +523,20 @@ namespace ArchiSteamFarm {
 			} else {
 				return "Bot " + BotName + " is currently not farming anything.";
 			}
+		}
+		private async Task<string> ResponseRank( ulong steamID, string profileID ) {
+			if ( steamID == 0 ) {
+				return null;
+			}
+			ArchiWebHandler.EClanRank rank = await ArchiWebHandler.GetProfileRank( UInt64.Parse(profileID) ).ConfigureAwait( false );
+
+			return "Rank: " + rank.ToString( "g" );
+		}
+		private string ResponseRank( ulong steamID ) {
+			if ( steamID == 0 ) {
+				return null;
+			}
+			return "Bot's rank: " + rank.ToString( "g" );
 		}
 
 		private static string ResponseStatus(ulong steamID, string botName) {
@@ -1595,13 +1614,9 @@ namespace ArchiSteamFarm {
 					}
 
 					if (BotConfig.SteamMasterClanID != 0) {
+						rank = await ArchiWebHandler.GetProfileRank( callback.ClientSteamID.ConvertToUInt64() ).ConfigureAwait( false );
 						await ArchiWebHandler.JoinClan(BotConfig.SteamMasterClanID).ConfigureAwait(false);
 						JoinMasterChat();
-					}
-
-					if (Program.GlobalConfig.Statistics) {
-						await ArchiWebHandler.JoinClan(ArchiSCFarmGroup).ConfigureAwait(false);
-						SteamFriends.JoinChat(ArchiSCFarmGroup);
 					}
 
 					Trading.CheckTrades();

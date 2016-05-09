@@ -75,9 +75,6 @@ namespace ArchiSteamFarm {
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal bool LogToFile { get; private set; } = true;
 
-		[JsonProperty(Required = Required.DisallowNull)]
-		internal bool Statistics { get; private set; } = false;
-
 		// TODO: Please remove me immediately after https://github.com/SteamRE/SteamKit/issues/254 gets fixed
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal bool HackIgnoreMachineID { get; private set; } = false;
