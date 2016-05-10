@@ -299,26 +299,15 @@ namespace ArchiSteamFarm {
 
 			foreach (var configFile in Directory.EnumerateFiles(ConfigDirectory, "*.json")) {
 				string botName = Path.GetFileNameWithoutExtension(configFile);
-				if (botName.Equals(ASF)) {
-					continue;
+				switch ( botName ) {
+					case ASF:
+					case "example":
+					case "minimal":
+						continue;
 				}
 
-				Bot bot = new Bot(botName);
-				if (bot.BotConfig == null || !bot.BotConfig.Enabled) {
-					Logging.LogGenericInfo("Not starting this instance because it's disabled in config file", botName);
-				}
-			}
-
-			// CONVERSION START
-			foreach (var configFile in Directory.EnumerateFiles(ConfigDirectory, "*.xml")) {
-				string botName = Path.GetFileNameWithoutExtension(configFile);
-				Logging.LogGenericWarning("Found legacy " + botName + ".xml config file, it will now be converted to new ASF V2.0 format!");
-				Bot bot = new Bot(botName);
-				if (bot.BotConfig == null || !bot.BotConfig.Enabled) {
-					Logging.LogGenericInfo("Not starting this instance because it's disabled in config file", botName);
-				}
-			}
-			// CONVERSION END
+				Bot bot = new Bot(botName);				
+			}			
 
 			// Check if we got any bots running
 			OnBotShutdown();

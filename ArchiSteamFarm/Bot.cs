@@ -66,9 +66,19 @@ namespace ArchiSteamFarm {
 		private bool LoggedInElsewhere = false;
 		private string AuthCode, TwoFactorAuth;
 
-		private ArchiWebHandler.EClanRank rank;
+		private EClanRank rank;
 
-		internal static async Task RefreshCMs(uint cellID) {
+		internal enum EClanRank
+		{
+			Owner = 4,
+			Officer = 3,
+			Moderator = 2,
+			Member = 1,
+			None = 0,
+			Unknown = -1
+		}
+
+		internal static async Task RefreshCMs(uint cellID) {			
 			bool initialized = false;
 			for (byte i = 0; i < 3 && !initialized; i++) {
 				try {
@@ -115,53 +125,9 @@ namespace ArchiSteamFarm {
 			BotName = botName;
 
 			string botPath = Path.Combine(Program.ConfigDirectory, botName);
-
-			// CONVERSION START
-			if (File.Exists(botPath + ".xml")) {
-				BotConfig = BotConfig.LoadOldFormat(botPath + ".xml");
-				if (BotConfig == null) {
-					return;
-				}
-
-				if (BotConfig.Convert(botPath + ".json")) {
-					try {
-						File.Delete(botPath + ".xml");
-					} catch (Exception e) {
-						Logging.LogGenericException(e, botName);
-						return;
-					}
-				}
-			}
-			// CONVERSION END
-
-			BotConfig = BotConfig.Load(botPath + ".json");
-			if (BotConfig == null) {
-				Logging.LogGenericError("Your config for this bot instance is invalid, it won't run!", botName);
-				return;
-			}
-
-			// CONVERSION START
-			if (File.Exists(botPath + ".key")) {
-				BotDatabase = BotDatabase.Load(botPath + ".db");
-				try {
-					BotDatabase.LoginKey = File.ReadAllText(botPath + ".key");
-					File.Delete(botPath + ".key");
-				} catch (Exception e) {
-					Logging.LogGenericException(e, BotName);
-				}
-			}
-			if (File.Exists(botPath + ".auth")) {
-				BotDatabase = BotDatabase.Load(botPath + ".db");
-				try {
-					BotDatabase.SteamGuardAccount = JsonConvert.DeserializeObject<SteamGuardAccount>(File.ReadAllText(botPath + ".auth"));
-					File.Delete(botPath + ".auth");
-				} catch (Exception e) {
-					Logging.LogGenericException(e, BotName);
-				}
-			}
-			// CONVERSION END
-
-			if (!BotConfig.Enabled) {
+			BotConfig = BotConfig.Load( botPath + ".json" );
+			if ( BotConfig == null ) {
+				Logging.LogGenericError( "Your config for this bot instance is invalid, it won't run!", botName );
 				return;
 			}
 
@@ -224,7 +190,6 @@ namespace ArchiSteamFarm {
 			CallbackManager.Subscribe<SteamUser.UpdateMachineAuthCallback>(OnMachineAuth);
 
 			CallbackManager.Subscribe<ArchiHandler.NotificationsCallback>(OnNotifications);
-			CallbackManager.Subscribe<ArchiHandler.OfflineMessageCallback>(OnOfflineMessage);
 			CallbackManager.Subscribe<ArchiHandler.PurchaseResponseCallback>(OnPurchaseResponse);
 
 			ArchiWebHandler = new ArchiWebHandler(this);
@@ -248,12 +213,7 @@ namespace ArchiSteamFarm {
 					TimeSpan.FromHours(BotConfig.SendTradePeriod) // Period
 				);
 			}
-
-			if (!BotConfig.StartOnLaunch) {
-				return;
-			}
-
-			// Start
+			
 			Start().Wait();
 		}
 
@@ -297,12 +257,9 @@ namespace ArchiSteamFarm {
 			}
 		}
 
+		[Obsolete]
 		internal void ResetGamesPlayed() {
-			if (!string.IsNullOrEmpty(BotConfig.CustomGamePlayedWhileIdle)) {
-				ArchiHandler.PlayGame(BotConfig.CustomGamePlayedWhileIdle);
-			} else {
-				ArchiHandler.PlayGames(BotConfig.GamesPlayedWhileIdle);
-			}
+			
 		}
 
 		internal async Task Restart() {
@@ -313,9 +270,6 @@ namespace ArchiSteamFarm {
 		internal async Task OnFarmingFinished(bool farmedSomething) {
 			if (farmedSomething && BotConfig.SendOnFarmingFinished) {
 				await ResponseLoot(BotConfig.SteamMasterID).ConfigureAwait(false);
-			}
-			if (BotConfig.ShutdownOnFarmingFinished) {
-				await Shutdown().ConfigureAwait(false);
 			}
 		}
 
@@ -528,7 +482,7 @@ namespace ArchiSteamFarm {
 			if ( steamID == 0 ) {
 				return null;
 			}
-			ArchiWebHandler.EClanRank rank = await ArchiWebHandler.GetProfileRank( UInt64.Parse(profileID) ).ConfigureAwait( false );
+			EClanRank rank = await ArchiWebHandler.GetProfileRank( UInt64.Parse(profileID) ).ConfigureAwait( false );
 
 			return "Rank: " + rank.ToString( "g" );
 		}
@@ -758,7 +712,7 @@ namespace ArchiSteamFarm {
 
 			return await bot.ResponseFarm(steamID).ConfigureAwait(false);
 		}
-
+		//TODO clean up
 		private async Task<string> ResponseRedeem(ulong steamID, string message, bool validate) {
 			if (steamID == 0 || string.IsNullOrEmpty(message)) {
 				return null;
@@ -804,93 +758,16 @@ namespace ArchiSteamFarm {
 						case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.OnCooldown:
 						case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.RegionLocked:
 							response.Append(Environment.NewLine + "<" + currentBot.BotName + "> Key: " + key + " | Status: " + purchaseResult + " | Items: " + string.Join("", items));
-							if (BotConfig.DistributeKeys) {
-								do {
-									if (iterator.MoveNext()) {
-										currentBot = iterator.Current;
-									} else {
-										currentBot = null;
-									}
-								} while (currentBot == this);
-
-								if (!BotConfig.ForwardKeysToOtherBots) {
-									key = reader.ReadLine();
-								}
-								break;
-							}
-
-							if (!BotConfig.ForwardKeysToOtherBots) {
-								key = reader.ReadLine();
-								break;
-							}
-
-							bool alreadyHandled = false;
-							foreach (Bot bot in Bots.Values) {
-								if (alreadyHandled) {
-									break;
-								}
-
-								if (bot == this) {
-									continue;
-								}
-
-								ArchiHandler.PurchaseResponseCallback otherResult;
-								try {
-									otherResult = await bot.ArchiHandler.RedeemKey(key).ConfigureAwait(false);
-								} catch (Exception e) {
-									Logging.LogGenericException(e, bot.BotName);
-									break; // We're done with this key
-								}
-
-								if (otherResult == null) {
-									break; // We're done with this key
-								}
-
-								var otherPurchaseResult = otherResult.PurchaseResult;
-								var otherItems = otherResult.Items;
-
-								switch (otherPurchaseResult) {
-									case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.OK:
-										alreadyHandled = true; // We're done with this key
-										response.Append(Environment.NewLine + "<" + bot.BotName + "> Key: " + key + " | Status: " + otherPurchaseResult + " | Items: " + string.Join("", otherItems));
-										break;
-									case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.DuplicatedKey:
-									case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.InvalidKey:
-										alreadyHandled = true; // This key doesn't work, don't try to redeem it anymore
-										response.Append(Environment.NewLine + "<" + bot.BotName + "> Key: " + key + " | Status: " + otherPurchaseResult + " | Items: " + string.Join("", otherItems));
-										break;
-									default:
-										response.Append(Environment.NewLine + "<" + bot.BotName + "> Key: " + key + " | Status: " + otherPurchaseResult + " | Items: " + string.Join("", otherItems));
-										break;
-								}
-							}
+							
 							key = reader.ReadLine();
 							break;
 						case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.OK:
-							response.Append(Environment.NewLine + "<" + currentBot.BotName + "> Key: " + key + " | Status: " + purchaseResult + " | Items: " + string.Join("", items));
-							if (BotConfig.DistributeKeys) {
-								do {
-									if (iterator.MoveNext()) {
-										currentBot = iterator.Current;
-									} else {
-										currentBot = null;
-									}
-								} while (currentBot == this);
-							}
+							response.Append(Environment.NewLine + "<" + currentBot.BotName + "> Key: " + key + " | Status: " + purchaseResult + " | Items: " + string.Join("", items));							
 							key = reader.ReadLine();
 							break;
 						case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.DuplicatedKey:
 						case ArchiHandler.PurchaseResponseCallback.EPurchaseResult.InvalidKey:
-							response.Append(Environment.NewLine + "<" + currentBot.BotName + "> Key: " + key + " | Status: " + purchaseResult + " | Items: " + string.Join("", items));
-							if (BotConfig.DistributeKeys && !BotConfig.ForwardKeysToOtherBots) {
-								do {
-									if (iterator.MoveNext()) {
-										currentBot = iterator.Current;
-									} else {
-										currentBot = null;
-									}
-								} while (currentBot == this);
-							}
+							response.Append(Environment.NewLine + "<" + currentBot.BotName + "> Key: " + key + " | Status: " + purchaseResult + " | Items: " + string.Join("", items));							
 							key = reader.ReadLine();
 							break;
 					}
@@ -1535,10 +1412,10 @@ namespace ArchiSteamFarm {
 			if (callback == null) {
 				return;
 			}
-
-			if (!BotConfig.FarmOffline) {
-				SteamFriends.SetPersonaState(EPersonaState.Online);
+			if (BotConfig.PersonaName != null && !callback.PersonaName.Equals(BotConfig.PersonaName)) {
+				SteamFriends.SetPersonaName( BotConfig.PersonaName );
 			}
+			SteamFriends.SetPersonaState(EPersonaState.Online);
 		}
 
 		private void OnLoggedOff(SteamUser.LoggedOffCallback callback) {
@@ -1589,11 +1466,7 @@ namespace ArchiSteamFarm {
 					if (BotDatabase.SteamGuardAccount == null && File.Exists(maFilePath)) {
 						ImportAuthenticator(maFilePath);
 					}
-
-					if (BotConfig.UseAsfAsMobileAuthenticator && TwoFactorAuth == null && BotDatabase.SteamGuardAccount == null) {
-						LinkMobileAuthenticator();
-					}
-
+					
 					// Reset one-time-only access tokens
 					AuthCode = null;
 					TwoFactorAuth = null;
@@ -1608,13 +1481,10 @@ namespace ArchiSteamFarm {
 						await Restart().ConfigureAwait(false);
 						return;
 					}
-
-					if (BotConfig.DismissInventoryNotifications) {
-						await ArchiWebHandler.MarkInventory().ConfigureAwait(false);
-					}
-
+					
 					if (BotConfig.SteamMasterClanID != 0) {
-						rank = await ArchiWebHandler.GetProfileRank( callback.ClientSteamID.ConvertToUInt64() ).ConfigureAwait( false );
+						ulong steamID64 = callback.ClientSteamID.ConvertToUInt64();
+						rank = await ArchiWebHandler.GetProfileRank( steamID64 ).ConfigureAwait( false );
 						await ArchiWebHandler.JoinClan(BotConfig.SteamMasterClanID).ConfigureAwait(false);
 						JoinMasterChat();
 					}
@@ -1688,12 +1558,8 @@ namespace ArchiSteamFarm {
 			}
 
 			bool checkTrades = false;
-			bool markInventory = false;
 			foreach (var notification in callback.Notifications) {
 				switch (notification.NotificationType) {
-					case ArchiHandler.NotificationsCallback.Notification.ENotificationType.Items:
-						markInventory = true;
-						break;
 					case ArchiHandler.NotificationsCallback.Notification.ENotificationType.Trading:
 						checkTrades = true;
 						break;
@@ -1703,22 +1569,6 @@ namespace ArchiSteamFarm {
 			if (checkTrades) {
 				Trading.CheckTrades();
 			}
-
-			if (markInventory && BotConfig.DismissInventoryNotifications) {
-				await ArchiWebHandler.MarkInventory().ConfigureAwait(false);
-			}
-		}
-
-		private void OnOfflineMessage(ArchiHandler.OfflineMessageCallback callback) {
-			if (callback == null) {
-				return;
-			}
-
-			if (!BotConfig.HandleOfflineMessages) {
-				return;
-			}
-
-			SteamFriends.RequestOfflineMessages();
 		}
 
 		private void OnPurchaseResponse(ArchiHandler.PurchaseResponseCallback callback) {

@@ -28,17 +28,31 @@ using System;
 using System.IO;
 
 namespace ArchiSteamFarm {
-	internal sealed class BotDatabase {
+	internal sealed class BotDatabase
+	{
 		internal string LoginKey {
 			get {
 				return _LoginKey;
 			}
 			set {
-				if (_LoginKey == value) {
+				if ( _LoginKey == value ) {
 					return;
 				}
 
 				_LoginKey = value;
+				Save();
+			}
+		}
+		internal string SteamApiKey {
+			get {
+				return _SteamApiKey;
+			}
+			set {
+				if ( _SteamApiKey == value ) {
+					return;
+				}
+
+				_SteamApiKey = value;
 				Save();
 			}
 		}
@@ -59,6 +73,9 @@ namespace ArchiSteamFarm {
 
 		[JsonProperty(Required = Required.AllowNull)]
 		private string _LoginKey;
+
+		[JsonProperty(Required = Required.AllowNull)]
+		private string _SteamApiKey;
 
 		[JsonProperty(Required = Required.AllowNull)]
 		private SteamGuardAccount _SteamGuardAccount;

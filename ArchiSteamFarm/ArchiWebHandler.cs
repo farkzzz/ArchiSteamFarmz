@@ -35,15 +35,7 @@ using System.Xml;
 
 namespace ArchiSteamFarm {
 	internal sealed class ArchiWebHandler {
-		internal enum EClanRank : byte
-		{
-			Owner = 4,
-			Officer = 3,
-			Moderator = 2,
-			Member = 1,
-			None = 0,
-		}
-
+		
 		private const string SteamCommunity = "steamcommunity.com";
 
 		private static string SteamCommunityURL = "https://" + SteamCommunity;
@@ -210,12 +202,12 @@ namespace ArchiSteamFarm {
 		}
 
 		internal List<Steam.TradeOffer> GetTradeOffers() {
-			if (string.IsNullOrEmpty(Bot.BotConfig.SteamApiKey)) {
+			if (string.IsNullOrEmpty(Bot.BotDatabase.SteamApiKey)) {
 				return null;
 			}
 
 			KeyValue response = null;
-			using (dynamic iEconService = WebAPI.GetInterface("IEconService", Bot.BotConfig.SteamApiKey)) {
+			using (dynamic iEconService = WebAPI.GetInterface("IEconService", Bot.BotDatabase.SteamApiKey )) {
 				iEconService.Timeout = Timeout;
 
 				for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++) {
@@ -268,6 +260,7 @@ namespace ArchiSteamFarm {
 
 			return result;
 		}
+		//TODO perform succes code and error check
         internal async Task<ulong> AcceptGift(ulong gid)
         {
             if (gid == 0)
@@ -417,12 +410,12 @@ namespace ArchiSteamFarm {
 		}
 
 		internal bool DeclineTradeOffer(ulong tradeID) {
-			if (tradeID == 0 || string.IsNullOrEmpty(Bot.BotConfig.SteamApiKey)) {
+			if (tradeID == 0 || string.IsNullOrEmpty( Bot.BotDatabase.SteamApiKey )) {
 				return false;
 			}
 
 			KeyValue response = null;
-			using (dynamic iEconService = WebAPI.GetInterface("IEconService", Bot.BotConfig.SteamApiKey)) {
+			using (dynamic iEconService = WebAPI.GetInterface("IEconService", Bot.BotDatabase.SteamApiKey )) {
 				iEconService.Timeout = Timeout;
 
 				for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++) {
@@ -686,8 +679,8 @@ namespace ArchiSteamFarm {
 
 			return result;
 		}
-		internal async Task<EClanRank> GetProfileRank( ulong profileID64 ) {
-			EClanRank rank = EClanRank.None;
+		internal async Task<Bot.EClanRank> GetProfileRank( ulong profileID64 ) {
+			var rank = Bot.EClanRank.None;
 			if ( profileID64 == 0 ) {
 				return rank;
 			}
@@ -701,7 +694,7 @@ namespace ArchiSteamFarm {
 			}
 
 			//so given profile is clan member. 
-			rank = EClanRank.Member;
+			rank = Bot.EClanRank.Member;
 
 			//lets find out his rank:
 			//getting his profile name
@@ -710,63 +703,55 @@ namespace ArchiSteamFarm {
 				return rank;
 			}
 
-			//searching in group members
-			HtmlDocument htmlDocument = null;
-			for ( byte i = 0; i < WebBrowser.MaxRetries && htmlDocument == null; i++ ) {
-				htmlDocument = await WebBrowser.UrlGetToHtmlDocument( SteamCommunityURL + "/gid/" + Bot.BotConfig.SteamMasterClanID +
-					"/members?searchKey=" + WebUtility.UrlEncode( profileName ) + "&l=english", Cookie ).ConfigureAwait( false );
+			//searching in group members			
+			var pages = new List<string>();
+			pages.Add( SteamCommunityURL + "/gid/" + Bot.BotConfig.SteamMasterClanID + "/members?searchKey=" + WebUtility.UrlEncode( profileName ) + "&l=english" );
+			//some strange issue. if profile name was changed recently search wont return it in group memebers. in this case we gonna perform full search
+			var membersPerPage = 51;
+			var pagesQty = ( clanMembers.Count + membersPerPage + 1 ) / membersPerPage;
+			for (int i = 1; i <= pagesQty; i++ ) {
+				//http://steamcommunity.com/groups/PUSY_KATS_LOUNGE/members/?p=5
+				pages.Add( SteamCommunityURL + "/gid/" + Bot.BotConfig.SteamMasterClanID + "/members/?p=" + i );
 			}
+			foreach ( var pageUrl in pages ) {
+				HtmlDocument htmlDocument = null;
+				for ( byte i = 0; i < WebBrowser.MaxRetries && htmlDocument == null; i++ ) {
+					htmlDocument = await WebBrowser.UrlGetToHtmlDocument( pageUrl, Cookie ).ConfigureAwait( false );
+				}
 
-			if ( htmlDocument == null ) {
-				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
-				return rank;
-			}
-			//getting rank			
-			var memberBlocks = htmlDocument.DocumentNode.SelectSingleNode( "//div[@id='memberList']" );
-			foreach (var memberBlockNode in memberBlocks.ChildNodes ) {
-				uint steamID3;
-				int i = 0;
-				if (memberBlockNode.Name != "div" || !uint.TryParse( memberBlockNode.Attributes["data-miniprofile"].Value, out steamID3)) {
-					continue;
-				}
-				if (steamID3 != profileID.AccountID) {
-					continue;
-				}
-				var rankNode = memberBlockNode.SelectSingleNode( "div[@class='rank_icon']" );
-				if (rankNode == null) {
+				if ( htmlDocument == null ) {
+					Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
 					return rank;
 				}
-				string rankTitle = rankNode.Attributes["title"].Value;
-				switch ( rankTitle ) {
-					case "Group Owner": rank = EClanRank.Owner; break;
-					case "Group Officer": rank = EClanRank.Officer; break;
-					case "Group Moderator": rank = EClanRank.Moderator; break;
-					default : rank = EClanRank.Member; break;
+				//getting rank			
+				var memberBlocks = htmlDocument.DocumentNode.SelectSingleNode( "//div[@id='memberList']" );
+				foreach ( var memberBlockNode in memberBlocks.ChildNodes ) {
+					uint steamID3;
+					if ( memberBlockNode.Name != "div"
+						|| memberBlockNode.Attributes["data-miniprofile"] == null
+						|| !uint.TryParse( memberBlockNode.Attributes["data-miniprofile"].Value, out steamID3 ) ) {
+						continue;
+					}
+					if ( steamID3 != profileID.AccountID ) {
+						continue;
+					}
+					var rankNode = memberBlockNode.SelectSingleNode( "div[@class='rank_icon']" );
+					if ( rankNode == null ) {
+						return rank;
+					}
+					string rankTitle = rankNode.Attributes["title"].Value;
+					switch ( rankTitle ) {
+						case "Group Owner": rank = Bot.EClanRank.Owner; break;
+						case "Group Officer": rank = Bot.EClanRank.Officer; break;
+						case "Group Moderator": rank = Bot.EClanRank.Moderator; break;
+						default: rank = Bot.EClanRank.Member; break;
+					}
+					return rank;
 				}
-				return rank;
-			}
-			return rank;
+			}									
+			return Bot.EClanRank.Unknown;
 		}
-
-
-		internal async Task<bool> MarkInventory() {
-			if (SteamID == 0) {
-				return false;
-			}
-
-			HttpResponseMessage response = null;
-			for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++) {
-				response = await WebBrowser.UrlGet(SteamCommunityURL + "/profiles/" + SteamID + "/inventory", Cookie).ConfigureAwait(false);
-			}
-
-			if (response == null) {
-				Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
-				return false;
-			}
-
-			return true;
-		}
-
+		
 		private async Task UnlockParentalAccount(string parentalPin) {
 			if (string.IsNullOrEmpty(parentalPin) || parentalPin.Equals("0")) {
 				return;
