@@ -439,44 +439,41 @@ namespace ArchiSteamFarm {
 			return true;
 		}
 
-        internal async Task<List<Steam.Item>> GetMyTradableInventory()
+        internal async Task<List<Steam.Item>> GetMyTradableInventory(string inventory)
         {
             List<Steam.Item> result = new List<Steam.Item>();
-            string[] appList = { "753/6", "730/2" };
-            foreach (var app in appList)
+            
+            JObject jObject = null;
+            for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++)
             {
-                JObject jObject = null;
-                for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++)
-                {
-                    jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/"+app+"/?trading=1", Cookie).ConfigureAwait(false);
-                }
+                jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/"+ inventory + "/?trading=1", Cookie).ConfigureAwait(false);
+            }
 
-                if (jObject == null)
-                {
-                    Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
-                    return null;
-                }
+            if (jObject == null)
+            {
+                Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
+                return null;
+            }
 
-                IEnumerable<JToken> jTokens = jObject.SelectTokens("$.rgInventory.*");
-                if (jTokens == null)
-                {
-                    Logging.LogNullError("jTokens", Bot.BotName);
-                    return null;
-                }
+            IEnumerable<JToken> jTokens = jObject.SelectTokens("$.rgInventory.*");
+            if (jTokens == null)
+            {
+                Logging.LogNullError("jTokens", Bot.BotName);
+                return null;
+            }
 
-                foreach (JToken jToken in jTokens)
+            foreach (JToken jToken in jTokens)
+            {
+                try
                 {
-                    try
-                    {
-                        var item = JsonConvert.DeserializeObject<Steam.Item>(jToken.ToString());
-                        item.appid = app.Split('/')[0];
-                        item.contextid = app.Split('/')[1];
-                        result.Add(item);
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.LogGenericException(e, Bot.BotName);
-                    }
+                    var item = JsonConvert.DeserializeObject<Steam.Item>(jToken.ToString());
+                    item.appid = inventory.Split('/')[0];
+                    item.contextid = inventory.Split('/')[1];
+                    result.Add(item);
+                }
+                catch (Exception e)
+                {
+                    Logging.LogGenericException(e, Bot.BotName);
                 }
             }
 
@@ -519,18 +516,18 @@ namespace ArchiSteamFarm {
             return result;
         }
 
-        internal async Task<bool> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
+        internal async Task<int> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
 			if (inventory == null || inventory.Count == 0 || partnerID == 0) {
-				return false;
+				return -1;
 			}
 
 			string sessionID;
 			if (!Cookie.TryGetValue("sessionid", out sessionID)) {
-				return false;
+				return -1;
 			}
 
 			List<Steam.TradeOfferRequest> trades = new List<Steam.TradeOfferRequest>(1 + inventory.Count / Trading.MaxItemsPerTrade);
-
+			int itemsCount = 0;
 			Steam.TradeOfferRequest singleTrade = null;
 			for (ushort i = 0; i < inventory.Count; i++) {
 				if (i % Trading.MaxItemsPerTrade == 0) {
@@ -571,11 +568,13 @@ namespace ArchiSteamFarm {
 
 				if (response == null) {
 					Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
-					return false;
+					return itemsCount==0?-1:itemsCount;
 				}
+				itemsCount += trade.me.assets.Count;
+				
 			}
 
-			return true;
+			return itemsCount;
 		}
 
 		internal async Task<HtmlDocument> GetBadgePage(byte page) {

@@ -545,27 +545,30 @@ namespace ArchiSteamFarm {
             }
 
             await Trading.LimitInventoryRequestsAsync().ConfigureAwait(false);
-            List<Steam.Item> inventory = await ArchiWebHandler.GetMyTradableInventory().ConfigureAwait(false);
-            List<ulong> gifts = await ArchiWebHandler.GetMyGifts().ConfigureAwait(false);
-            var count = 0;
-            if (gifts != null && gifts.Count != 0)
-            { 
-                foreach (var gid in gifts)
-                {
-                    await ArchiWebHandler.SendGift(BotConfig.SteamMasterID, gid).ConfigureAwait(false);
-                    count++;
-                }
+			var itemsCount = 0;
+			List<Steam.Item> inventoryItems = new List<Steam.Item>();
+			List<ulong> gifts = new List<ulong>();
 
-            }
-            if (inventory != null && inventory.Count != 0)
-            {
-                if (await ArchiWebHandler.SendTradeOffer(inventory, BotConfig.SteamMasterID, BotConfig.SteamTradeToken).ConfigureAwait(false))
-                {
-                    await AcceptConfirmations(Confirmation.ConfirmationType.Trade).ConfigureAwait(false);
-                    count += Math.Min(inventory.Count, 20);
-                }
-            }
-            return "Items were sent: " + count + "!";
+			foreach (string inventory in BotConfig.LootableInventories) {
+				if (inventory == "753/1" ) {
+					gifts = await ArchiWebHandler.GetMyGifts().ConfigureAwait(false);
+					if ( gifts != null && gifts.Count != 0 ) {
+						foreach ( var gid in gifts ) {
+							await ArchiWebHandler.SendGift( BotConfig.SteamMasterID, gid ).ConfigureAwait( false );
+							itemsCount++;
+						}
+
+					}
+				} else {
+					inventoryItems.AddRange(await ArchiWebHandler.GetMyTradableInventory(inventory).ConfigureAwait(false));					
+				}
+			}
+			int tradeResult = await ArchiWebHandler.SendTradeOffer( inventoryItems, BotConfig.SteamMasterID, BotConfig.SteamTradeToken ).ConfigureAwait( false );
+			if ( tradeResult > -1 ) {
+				await AcceptConfirmations( Confirmation.ConfirmationType.Trade ).ConfigureAwait( false );
+				itemsCount += tradeResult;
+			}
+			return itemsCount + " items out of " + inventoryItems.Count + gifts.Count + " were sent!";
         }
 
 		private static async Task<string> ResponseLoot(ulong steamID, string botName) {

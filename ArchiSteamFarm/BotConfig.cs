@@ -30,7 +30,7 @@ using System.Xml;
 
 namespace ArchiSteamFarm {
 	internal sealed class BotConfig {
-		
+
 		[JsonProperty]
 		internal string SteamLogin { get; set; } = null;
 
@@ -41,31 +41,34 @@ namespace ArchiSteamFarm {
 		internal string PersonaName { get; set; } = null;
 
 		[JsonProperty]
-        internal string SteamParentalPIN { get; set; } = "0";
-		
-		[JsonProperty(Required = Required.DisallowNull)]
+		internal string SteamParentalPIN { get; set; } = "0";
+
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal ulong SteamMasterID { get; private set; } = 0;
 
-		[JsonProperty(Required = Required.DisallowNull)]
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal ulong SteamMasterClanID { get; private set; } = 0;
 
-		[JsonProperty(Required = Required.DisallowNull)]
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal bool CardDropsRestricted { get; private set; } = false;
 
-		[JsonProperty(Required = Required.DisallowNull)]
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal bool AcceptGifts { get; private set; } = true;
 
-		[JsonProperty(Required = Required.DisallowNull)]
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal bool SendOnFarmingFinished { get; private set; } = true;
 
 		[JsonProperty]
 		internal string SteamTradeToken { get; private set; } = null;
 
-		[JsonProperty(Required = Required.DisallowNull)]
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal byte SendTradePeriod { get; private set; } = 0;
 
-		[JsonProperty(Required = Required.DisallowNull)]
+		[JsonProperty( Required = Required.DisallowNull )]
 		internal byte AcceptConfirmationsPeriod { get; private set; } = 0;
+
+		[JsonProperty( Required = Required.DisallowNull )]
+		internal HashSet<string> LootableInventories { get; private set; } = new HashSet<string>( new string[] { "753/6" } );
 
 		internal static BotConfig Load(string path) {
 			if (!File.Exists(path)) {
