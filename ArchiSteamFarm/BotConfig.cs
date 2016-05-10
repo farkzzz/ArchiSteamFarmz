@@ -74,8 +74,11 @@ namespace ArchiSteamFarm {
 		internal byte AcceptConfirmationsPeriod { get; private set; } = 0;
 
 		[JsonProperty( Required = Required.DisallowNull )]
-		internal HashSet<string> LootableInventories { get; private set; } = new HashSet<string>( new string[] { "753/6" } );
+		internal byte DistributeGiftsPeriod { get; private set; } = 0;
 
+		[JsonProperty( Required = Required.DisallowNull )]
+		internal HashSet<string> LootableInventories { get; private set; } = new HashSet<string>( new string[] { "753/6" } );
+		
 		internal static BotConfig Load(string path) {
 			if (!File.Exists(path)) {
 				return null;

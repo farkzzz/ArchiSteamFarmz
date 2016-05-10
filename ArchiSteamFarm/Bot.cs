@@ -45,6 +45,7 @@ namespace ArchiSteamFarm {
 		private readonly string SentryFile;
 		private readonly Timer AcceptConfirmationsTimer;
 		private readonly Timer SendItemsTimer;
+		private readonly Timer DistributeGiftsTimer;
 
 		internal readonly string BotName;
 		internal readonly ArchiHandler ArchiHandler;
@@ -196,24 +197,33 @@ namespace ArchiSteamFarm {
 			CardsFarmer = new CardsFarmer(this);
 			Trading = new Trading(this);
 
-			if (BotConfig.AcceptConfirmationsPeriod > 0 && AcceptConfirmationsTimer == null) {
+			if ( BotConfig.AcceptConfirmationsPeriod > 0 && AcceptConfirmationsTimer == null ) {
 				AcceptConfirmationsTimer = new Timer(
-					async e => await AcceptConfirmations().ConfigureAwait(false),
+					async e => await AcceptConfirmations().ConfigureAwait( false ),
 					null,
-					TimeSpan.FromMinutes(BotConfig.AcceptConfirmationsPeriod), // Delay
-					TimeSpan.FromMinutes(BotConfig.AcceptConfirmationsPeriod) // Period
+					TimeSpan.FromMinutes( BotConfig.AcceptConfirmationsPeriod ), // Delay
+					TimeSpan.FromMinutes( BotConfig.AcceptConfirmationsPeriod ) // Period
 				);
 			}
 
-			if (BotConfig.SendTradePeriod > 0 && SendItemsTimer == null) {
+			if ( BotConfig.SendTradePeriod > 0 && SendItemsTimer == null ) {
 				SendItemsTimer = new Timer(
-					async e => await ResponseLoot(BotConfig.SteamMasterID).ConfigureAwait(false),
+					async e => await ResponseLoot( BotConfig.SteamMasterID ).ConfigureAwait( false ),
 					null,
-					TimeSpan.FromHours(BotConfig.SendTradePeriod), // Delay
-					TimeSpan.FromHours(BotConfig.SendTradePeriod) // Period
+					TimeSpan.FromHours( BotConfig.SendTradePeriod ), // Delay
+					TimeSpan.FromHours( BotConfig.SendTradePeriod ) // Period
 				);
 			}
-			
+
+			if ( BotConfig.DistributeGiftsPeriod > 0 && DistributeGiftsTimer == null ) {
+				DistributeGiftsTimer = new Timer(
+					async e => await DistributeGifts().ConfigureAwait( false ),
+					null,
+					TimeSpan.FromHours( BotConfig.SendTradePeriod ), // Delay
+					TimeSpan.FromHours( BotConfig.SendTradePeriod ) // Period
+				);
+			}
+
 			Start().Wait();
 		}
 
@@ -237,7 +247,16 @@ namespace ArchiSteamFarm {
 			}
 			return false;
 		}
-
+		internal async Task<string> DistributeGifts() {
+			List<ulong> allowedIDs = new List<ulong>();
+			foreach (var bot in Bots.Values) {
+				if ( SteamUser.SteamID != null && bot.IsMaster(SteamUser.SteamID.ConvertToUInt64())) {
+					allowedIDs.Add( bot.SteamUser.SteamID.AccountID );
+				}
+			}
+			await ArchiWebHandler.DistributeGiftsTo( allowedIDs ).ConfigureAwait( false );
+			return "Sent!";
+		}
 		internal async Task AcceptConfirmations(Confirmation.ConfirmationType allowedConfirmationType = Confirmation.ConfirmationType.Unknown) {
 			if (BotDatabase.SteamGuardAccount == null) {
 				return;
@@ -298,11 +317,13 @@ namespace ArchiSteamFarm {
 			if (!message.Contains(" ")) {
 				switch (message) {
 					case "!2fa":
-						return Response2FA(steamID);
+						return Response2FA( steamID );
 					case "!2faoff":
 						return Response2FAOff(steamID);
 					case "!2faok":
-						return await Response2FAOK(steamID).ConfigureAwait(false);
+						return await Response2FAOK( steamID ).ConfigureAwait( false );
+					case "!sendgifts":
+						return await DistributeGifts( ).ConfigureAwait( false );
 					case "!exit":
 						return ResponseExit(steamID);
 					case "!farm":

@@ -302,50 +302,50 @@ namespace ArchiSteamFarm {
             }
             return 1;
         }
-        internal async Task<bool> SendGift(ulong recipientID, ulong gid)
+		internal async Task<bool> SendGift( uint recipientAccountID, ulong gid ) {
+			if ( gid == 0 ) {
+				return false;
+			}
+
+			string sessionID;
+			if ( !Cookie.TryGetValue( "sessionid", out sessionID ) ) {
+				return false;
+			}
+			if ( string.IsNullOrEmpty( sessionID ) ) {
+				Logging.LogNullError( "sessionID" );
+				return false;
+			}
+
+			string request = "https://store.steampowered.com/checkout/sendgiftsubmit/";
+			Dictionary<string, string> data = new Dictionary<string, string>(2) {
+				{"GifteeAccountID", recipientAccountID.ToString()},
+				{"GifteeEmail", "add_to_cart"},
+				{"GifteeName", "master"},
+				{"GiftMessage", "Sent by ASF"},
+				{"GiftSentiment", ""},
+				{"GiftSignature", "ASF"},
+				{"GiftGID", gid.ToString()},
+				{"SessionID", sessionID}
+			};
+
+			HttpResponseMessage response = null;
+			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
+				response = await WebBrowser.UrlPost( request, data, Cookie ).ConfigureAwait( false );
+			}
+
+			if ( response == null ) {
+				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
+				return false;
+			}
+
+			return true;
+		}
+
+		internal async Task<bool> SendGift(ulong recipientProfileID, ulong gid)
         {
-            if (gid == 0)
-            {
-                return false;
-            }
-
-            string sessionID;
-            if (!Cookie.TryGetValue("sessionid", out sessionID))
-            {
-                return false;
-            }
-            if (string.IsNullOrEmpty(sessionID))
-            {
-                Logging.LogNullError("sessionID");
-                return false;
-            }
-            var recipientID3 = new SteamID();
-            recipientID3.SetFromUInt64(recipientID);
-            string request = "https://store.steampowered.com/checkout/sendgiftsubmit/";
-            Dictionary<string, string> data = new Dictionary<string, string>(2) {
-                {"GifteeAccountID", recipientID3.AccountID.ToString()},
-                {"GifteeEmail", "add_to_cart"},
-                {"GifteeName", "master"},
-                {"GiftMessage", "Sent by ASF"},
-                {"GiftSentiment", ""},
-                {"GiftSignature", "ASF"},
-                {"GiftGID", gid.ToString()},
-                {"SessionID", sessionID}
-            };
-
-            HttpResponseMessage response = null;
-            for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++)
-            {
-                response = await WebBrowser.UrlPost(request, data, Cookie).ConfigureAwait(false);
-            }
-
-            if (response == null)
-            {
-                Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
-                return false;
-            }
-
-            return true;
+			var recipientID3 = new SteamID();
+			recipientID3.SetFromUInt64( recipientProfileID );
+			return await SendGift( recipientID3.AccountID, gid ).ConfigureAwait( false );
         }
         internal async Task<bool> JoinClan(ulong clanID) {
 			if (clanID == 0) {
@@ -515,8 +515,56 @@ namespace ArchiSteamFarm {
 
             return result;
         }
+		internal async Task<List<uint>> GetFreindsWhichDontOwn ( ulong giftID ) {
+			var accountIDs = new List<uint>();
 
-        internal async Task<int> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
+			HtmlDocument sendGiftPage = await WebBrowser.UrlGetToHtmlDocument("https://store.steampowered.com/checkout/sendgift/" + giftID, Cookie).ConfigureAwait( false );
+
+			var memberBlocks = sendGiftPage.DocumentNode.SelectSingleNode( "//div[@id='friends_chooser']" );
+			foreach ( var memberBlockNode in memberBlocks.ChildNodes ) {
+				uint accountID;
+				if ( memberBlockNode.Name != "div" ) {
+					continue;
+				}
+				if( memberBlockNode.Attributes["class"] == null
+					|| !memberBlockNode.Attributes["class"].Value.Contains("friend_block")
+				) {
+					continue;
+				}
+				if (!UInt32.TryParse( memberBlockNode.Id.Substring( 13 ), out accountID )) {
+					continue;
+				}
+				bool owns = false;
+				//bs I can lmao
+				foreach (var block in memberBlockNode.ChildNodes) {
+					if (block.Attributes["class"] != null && block.Attributes["class"].Value.Contains( "already_owns" ) ) {
+						owns = true;
+						break;
+					}
+				}
+				if ( !owns ) {
+					accountIDs.Add( accountID );
+				}
+			}
+			return accountIDs;
+		}
+		internal async Task DistributeGiftsTo ( List<ulong> allowedAccountIDs ) {
+			var giftIDs = await GetMyGifts().ConfigureAwait( false );
+			foreach (var giftID in giftIDs) {
+				var dontOwn = await GetFreindsWhichDontOwn( giftID ).ConfigureAwait( false );
+				if (dontOwn.Count == 0) {
+					continue;
+				}
+				foreach (var accountID in dontOwn) {
+					if ( allowedAccountIDs.Contains( accountID )) {
+						await SendGift( accountID, giftID ).ConfigureAwait( false );
+						break;
+					}
+				} 
+			}
+		}
+
+		internal async Task<int> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
 			if (inventory == null || inventory.Count == 0 || partnerID == 0) {
 				return -1;
 			}
