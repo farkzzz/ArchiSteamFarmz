@@ -217,12 +217,25 @@ namespace ArchiSteamFarm {
 			Start().Wait();
 		}
 
-		internal bool IsMaster(ulong steamID) {
-			if (steamID == 0) {
+		public bool IsMaster( ulong steamID ) {
+			if ( steamID == 0 ) {
 				return false;
 			}
 
-			return steamID == BotConfig.SteamMasterID || IsOwner(steamID);
+			return steamID == BotConfig.SteamMasterID || IsOwner( steamID );
+		}
+		public bool IsSlave( ulong steamID ) {
+			if ( steamID == 0 ) {
+				return false;
+			}
+			foreach ( var botPair in Bots ) {
+				var bot = botPair.Value;
+				
+				if ( bot.IsMaster( this.SteamUser.SteamID.ConvertToUInt64() ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		internal async Task AcceptConfirmations(Confirmation.ConfirmationType allowedConfirmationType = Confirmation.ConfirmationType.Unknown) {
@@ -1341,8 +1354,12 @@ namespace ArchiSteamFarm {
 			if (callback == null) {
 				return;
 			}
-
-			foreach (var friend in callback.FriendList) {
+			bool isMasterInFriendList = false;
+				 
+			foreach (var friend in callback.FriendList) {	
+				if (IsMaster( friend.SteamID.ConvertToUInt64())) {
+					isMasterInFriendList = true;
+				}			
 				if (friend.Relationship != EFriendRelationship.RequestRecipient) {
 					continue;
 				}
@@ -1352,11 +1369,29 @@ namespace ArchiSteamFarm {
 						// TODO: Accept clan invites from master?
 						break;
 					default:
-						if (!IsMaster(friend.SteamID)) {
+						if ( IsMaster(friend.SteamID) ) {
+							SteamFriends.AddFriend( friend.SteamID );
 							break;
 						}
-						SteamFriends.AddFriend(friend.SteamID);
+						if ( BotConfig.AddSlaves && IsSlave( friend.SteamID ) ) {
+							SteamFriends.AddFriend( friend.SteamID );
+							break;
+						}
 						break;
+						
+				}
+			}
+
+			if (BotConfig.SteamMasterID != 0 && !isMasterInFriendList) {
+				foreach (var bot in Bots.Values ) {
+					if ( bot.SteamUser.SteamID.ConvertToUInt64() == this.BotConfig.SteamMasterID && bot.BotConfig.AddSlaves) {
+						bot.SteamFriends.AddFriend( this.SteamUser.SteamID );
+						break;
+					}
+				}
+				//In the case if master dont use bot
+				if ( BotConfig.AddMaster ) {
+					SteamFriends.AddFriend( BotConfig.SteamMasterID );
 				}
 			}
 		}

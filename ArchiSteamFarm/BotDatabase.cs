@@ -74,7 +74,7 @@ namespace ArchiSteamFarm {
 		[JsonProperty(Required = Required.AllowNull)]
 		private string _LoginKey;
 
-		[JsonProperty(Required = Required.AllowNull)]
+		[JsonProperty]
 		private string _SteamApiKey;
 
 		[JsonProperty(Required = Required.AllowNull)]
