@@ -57,12 +57,38 @@ namespace ArchiSteamFarm {
 			}
 		}
 
+		internal ulong SteamID64 {
+			get {
+				return _SteamID64;
+			}
+			set {
+				if ( _SteamID64 == value ) {
+					return;
+				}
+
+				_SteamID64 = value;
+				Save();
+			}
+		}
+		internal uint AccountID {
+			get {
+				return _AccountID;
+			}
+			set {
+				if ( _AccountID == value ) {
+					return;
+				}
+
+				_AccountID = value;
+				Save();
+			}
+		}
 		internal SteamGuardAccount SteamGuardAccount {
 			get {
 				return _SteamGuardAccount;
 			}
 			set {
-				if (_SteamGuardAccount == value) {
+				if ( _SteamGuardAccount == value ) {
 					return;
 				}
 
@@ -76,6 +102,12 @@ namespace ArchiSteamFarm {
 
 		[JsonProperty]
 		private string _SteamApiKey;
+
+		[JsonProperty]
+		private ulong _SteamID64 = 0;
+
+		[JsonProperty]
+		private uint _AccountID = 0;
 
 		[JsonProperty(Required = Required.AllowNull)]
 		private SteamGuardAccount _SteamGuardAccount;

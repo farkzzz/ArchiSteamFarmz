@@ -232,7 +232,7 @@ namespace ArchiSteamFarm {
 				return false;
 			}
 
-			return steamID == BotConfig.SteamMasterID || IsOwner( steamID );
+			return steamID == BotConfig.SteamMasterID;
 		}
 		public bool IsSlave( ulong steamID ) {
 			if ( steamID == 0 ) {
@@ -248,10 +248,14 @@ namespace ArchiSteamFarm {
 			return false;
 		}
 		internal async Task<string> DistributeGifts() {
-			List<ulong> allowedIDs = new List<ulong>();
+			List<uint> allowedIDs = new List<uint>();
 			foreach (var bot in Bots.Values) {
-				if ( SteamUser.SteamID != null && bot.IsMaster(SteamUser.SteamID.ConvertToUInt64())) {
-					allowedIDs.Add( bot.SteamUser.SteamID.AccountID );
+				if ( bot == null || bot.BotDatabase.SteamID64 == 0 || this.BotDatabase.SteamID64 == 0
+					|| bot.BotDatabase.AccountID == 0 || this.BotDatabase.AccountID == 0) {
+					continue;
+				}
+				if ( bot.IsMaster( this.BotDatabase.SteamID64 )) {
+					allowedIDs.Add( bot.BotDatabase.AccountID );
 				}
 			}
 			await ArchiWebHandler.DistributeGiftsTo( allowedIDs ).ConfigureAwait( false );
@@ -602,7 +606,7 @@ namespace ArchiSteamFarm {
 				await AcceptConfirmations( Confirmation.ConfirmationType.Trade ).ConfigureAwait( false );
 				itemsCount += tradeResult;
 			}
-			return itemsCount + " items out of " + inventoryItems.Count + gifts.Count + " were sent!";
+			return itemsCount + " items out of " + (inventoryItems.Count + gifts.Count) + " were sent!";
         }
 
 		private static async Task<string> ResponseLoot(ulong steamID, string botName) {
@@ -1519,7 +1523,12 @@ namespace ArchiSteamFarm {
 					if (callback.CellID != 0) {
 						Program.GlobalDatabase.CellID = callback.CellID;
 					}
-
+					if ( callback.ClientSteamID.ConvertToUInt64() != BotDatabase.SteamID64 ) {
+						BotDatabase.SteamID64 = callback.ClientSteamID.ConvertToUInt64();
+					}
+					if ( callback.ClientSteamID.AccountID != BotDatabase.AccountID ) {
+						BotDatabase.AccountID = callback.ClientSteamID.AccountID;
+					}
 					// Support and convert SDA files
 					string maFilePath = Path.Combine(Program.ConfigDirectory, callback.ClientSteamID.ConvertToUInt64() + ".maFile");
 					if (BotDatabase.SteamGuardAccount == null && File.Exists(maFilePath)) {

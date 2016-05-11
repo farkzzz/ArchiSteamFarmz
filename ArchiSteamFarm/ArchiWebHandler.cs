@@ -527,11 +527,13 @@ namespace ArchiSteamFarm {
 					continue;
 				}
 				if( memberBlockNode.Attributes["class"] == null
-					|| !memberBlockNode.Attributes["class"].Value.Contains("friend_block")
+					|| !memberBlockNode.Attributes["class"].Value.Contains( "friend_block" )
+					|| !UInt32.TryParse( memberBlockNode.Id.Substring( 13 ), out accountID )
 				) {
 					continue;
 				}
-				if (!UInt32.TryParse( memberBlockNode.Id.Substring( 13 ), out accountID )) {
+				if (false
+					|| memberBlockNode.Attributes["class"].Value.Contains( "friend_status_offline" ) ) {
 					continue;
 				}
 				bool owns = false;
@@ -548,7 +550,7 @@ namespace ArchiSteamFarm {
 			}
 			return accountIDs;
 		}
-		internal async Task DistributeGiftsTo ( List<ulong> allowedAccountIDs ) {
+		internal async Task DistributeGiftsTo ( List<uint> allowedAccountIDs ) {
 			var giftIDs = await GetMyGifts().ConfigureAwait( false );
 			foreach (var giftID in giftIDs) {
 				var dontOwn = await GetFreindsWhichDontOwn( giftID ).ConfigureAwait( false );
