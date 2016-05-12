@@ -397,6 +397,11 @@ namespace ArchiSteamFarm {
 						return ResponseStatus(steamID, args[1]);
 					case "!stop":
 						return await ResponseStop(steamID, args[1]).ConfigureAwait(false);
+					//sharedfiles
+					case "!voteup":
+						return await ArchiWebHandler.SharedFileVote( "up", args[1] ).ConfigureAwait( false );
+					case "!votedown":
+						return await ArchiWebHandler.SharedFileVote( "down", args[1] ).ConfigureAwait( false );
 					default:
 						return "Unrecognized command: " + args[0];
 				}
@@ -625,7 +630,7 @@ namespace ArchiSteamFarm {
 					}
 				} else {
 					var inventorySection = await ArchiWebHandler.GetMyTradableInventory(inventory).ConfigureAwait(false);
-					if (inventory != null) {
+					if (inventorySection != null) {
 						inventoryItems.AddRange(inventorySection);
 					}
 				}
@@ -1232,7 +1237,7 @@ namespace ArchiSteamFarm {
 			}
 
 			Logging.LogGenericInfo("Connected to Steam!", BotName);
-
+			
 			if (!KeepRunning) {
 				Logging.LogGenericInfo("Disconnecting...", BotName);
 				SteamClient.Disconnect();

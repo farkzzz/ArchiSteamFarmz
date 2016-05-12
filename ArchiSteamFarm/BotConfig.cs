@@ -39,7 +39,7 @@ namespace ArchiSteamFarm {
 
 		[JsonProperty( Required = Required.DisallowNull )]
 		internal bool AddMaster { get; private set; } = true;
-
+		
 		[JsonProperty]
 		internal string SteamLogin { get; set; } = null;
 

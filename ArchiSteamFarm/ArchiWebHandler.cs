@@ -340,7 +340,36 @@ namespace ArchiSteamFarm {
 
 			return true;
 		}
+		internal async Task<string> SharedFileVote( string vote, string fileId ) {
+			ulong id;
+			
+			string sessionID;
+			if ( !Cookie.TryGetValue( "sessionid", out sessionID ) ) {
+				return "Error: no sessionid!";
+			}
+			if ( string.IsNullOrEmpty( sessionID ) ) {
+				Logging.LogNullError( "sessionID" );
+				return "Error: sessionid is null or empty!";
+			}
 
+			string request = "http://steamcommunity.com/sharedfiles/vote" + vote;
+			Dictionary<string, string> data = new Dictionary<string, string>(2) {
+				{"id", fileId},
+				{"sessionid", sessionID}
+			};
+
+			HttpResponseMessage response = null;
+			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
+				response = await WebBrowser.UrlPost( request, data, Cookie ).ConfigureAwait( false );
+			}
+
+			if ( response == null ) {
+				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
+				return "Request failed even after " + WebBrowser.MaxRetries + " tries!";
+			}
+
+			return "Voted!";
+		}
 		internal async Task<bool> SendGift(ulong recipientProfileID, ulong gid)
         {
 			var recipientID3 = new SteamID();
