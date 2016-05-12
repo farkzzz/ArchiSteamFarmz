@@ -1550,6 +1550,9 @@ namespace ArchiSteamFarm {
 						return;
 					}
 					
+					if (BotDatabase.SteamApiKey == null || BotDatabase.SteamApiKey.Length == 0) {
+						BotDatabase.SteamApiKey = await ArchiWebHandler.GetAPIKey().ConfigureAwait( false );
+					}
 					if (BotConfig.SteamMasterClanID != 0) {
 						ulong steamID64 = callback.ClientSteamID.ConvertToUInt64();
 						rank = await ArchiWebHandler.GetProfileRank( steamID64 ).ConfigureAwait( false );

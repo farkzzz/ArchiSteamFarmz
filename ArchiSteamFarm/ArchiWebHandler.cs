@@ -626,7 +626,41 @@ namespace ArchiSteamFarm {
 
 			return itemsCount;
 		}
+		internal async Task<string> GetAPIKey() {
 
+			string apiKey = null;
+
+			string sessionID;
+			if ( !Cookie.TryGetValue( "sessionid", out sessionID ) ) {
+				return null;
+			}
+			if ( string.IsNullOrEmpty( sessionID ) ) {
+				Logging.LogNullError( "sessionID" );
+				return null;
+			}
+
+			for ( byte i = 0; i < WebBrowser.MaxRetries && apiKey == null; i++ ) {
+				HtmlDocument htmlDocument = await WebBrowser.UrlGetToHtmlDocument( SteamCommunityURL + "/dev/apikey?l=english", Cookie ).ConfigureAwait( false );
+				if (htmlDocument == null) {
+					continue;
+				}
+				var keyContents = htmlDocument.DocumentNode.SelectSingleNode( "//div[@id='bodyContents_ex']/p" );			
+				if (keyContents != null && keyContents.InnerText.Contains("Key:")) {
+					return keyContents.InnerText.Substring(5);
+				} else {
+					Dictionary<string, string> data = new Dictionary<string, string>() {
+						{"domain", "localhost" },
+						{"agreeToTerms", "agreed"},
+						{"sessionid", sessionID},
+						{"Submit", "Register"}
+					};
+
+					HttpResponseMessage response = null;
+					response = await WebBrowser.UrlPost( SteamCommunityURL + "/dev/registerkey" , data, Cookie ).ConfigureAwait( false );					
+				}
+			}
+			return "";
+		}
 		internal async Task<HtmlDocument> GetBadgePage(byte page) {
 			if (page == 0 || SteamID == 0) {
 				return null;
