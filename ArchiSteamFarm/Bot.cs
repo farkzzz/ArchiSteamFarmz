@@ -598,13 +598,18 @@ namespace ArchiSteamFarm {
 
 					}
 				} else {
-					inventoryItems.AddRange(await ArchiWebHandler.GetMyTradableInventory(inventory).ConfigureAwait(false));					
+					var inventorySection = await ArchiWebHandler.GetMyTradableInventory(inventory).ConfigureAwait(false);
+					if (inventory != null) {
+						inventoryItems.AddRange(inventorySection);
+					}
 				}
 			}
-			int tradeResult = await ArchiWebHandler.SendTradeOffer( inventoryItems, BotConfig.SteamMasterID, BotConfig.SteamTradeToken ).ConfigureAwait( false );
-			if ( tradeResult > -1 ) {
-				await AcceptConfirmations( Confirmation.ConfirmationType.Trade ).ConfigureAwait( false );
-				itemsCount += tradeResult;
+			if (inventoryItems.Count > 0) {
+				int tradeResult = await ArchiWebHandler.SendTradeOffer( inventoryItems, BotConfig.SteamMasterID, BotConfig.SteamTradeToken ).ConfigureAwait( false );
+				if ( tradeResult > -1 ) {
+					await AcceptConfirmations( Confirmation.ConfirmationType.Trade ).ConfigureAwait( false );
+					itemsCount += tradeResult;
+				}
 			}
 			return itemsCount + " items out of " + (inventoryItems.Count + gifts.Count) + " were sent!";
         }
@@ -1409,8 +1414,8 @@ namespace ArchiSteamFarm {
 
 			if (BotConfig.SteamMasterID != 0 && !isMasterInFriendList) {
 				foreach (var bot in Bots.Values ) {
-					if ( bot.SteamUser.SteamID.ConvertToUInt64() == this.BotConfig.SteamMasterID && bot.BotConfig.AddSlaves) {
-						bot.SteamFriends.AddFriend( this.SteamUser.SteamID );
+					if ( bot.BotDatabase.SteamID64 == this.BotConfig.SteamMasterID && bot.BotConfig.AddSlaves) {
+						bot.SteamFriends.AddFriend( bot.BotDatabase.SteamID64 );
 						break;
 					}
 				}
@@ -1549,14 +1554,13 @@ namespace ArchiSteamFarm {
 						await Restart().ConfigureAwait(false);
 						return;
 					}
-					
 					if (BotDatabase.SteamApiKey == null || BotDatabase.SteamApiKey.Length == 0) {
 						BotDatabase.SteamApiKey = await ArchiWebHandler.GetAPIKey().ConfigureAwait( false );
 					}
 					if (BotConfig.SteamMasterClanID != 0) {
 						ulong steamID64 = callback.ClientSteamID.ConvertToUInt64();
+						await ArchiWebHandler.JoinClan( BotConfig.SteamMasterClanID ).ConfigureAwait( false );
 						rank = await ArchiWebHandler.GetProfileRank( steamID64 ).ConfigureAwait( false );
-						await ArchiWebHandler.JoinClan(BotConfig.SteamMasterClanID).ConfigureAwait(false);
 						JoinMasterChat();
 					}
 
