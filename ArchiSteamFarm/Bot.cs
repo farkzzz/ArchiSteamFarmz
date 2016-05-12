@@ -33,6 +33,9 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
+using System.Reflection;
+using System.Net.Sockets;
+using System.Net;
 
 namespace ArchiSteamFarm {
 	internal sealed class Bot {
@@ -417,7 +420,30 @@ namespace ArchiSteamFarm {
 				await Program.LimitSteamRequestsAsync().ConfigureAwait(false);
 			}
 
-			SteamClient.Connect();
+			
+
+			if ( BotConfig.LocalIP != null ) {
+				//https://github.com/SteamRE/SteamKit/issues/83#issuecomment-70038392
+				//so its time to rape steamkit
+				Socket socket;
+				var ip = BitConverter.ToInt32( IPAddress.Parse( BotConfig.LocalIP ).GetAddressBytes(), 0 );
+				var localEndPoint = new IPEndPoint(ip, 0);
+				BindingFlags bindFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+				var connection = typeof(CMClient).GetField("connection", bindFlags).GetValue( SteamClient );
+				FieldInfo socketField = connection.GetType().GetField( "socket", bindFlags );
+				SteamClient.Connect();
+				do {
+					socket = socketField.GetValue( connection ) as Socket;
+				} while ( socket == null );
+				try {
+					socket.Bind( localEndPoint );
+					//ayy lmao
+				} catch (Exception e) {
+					Logging.LogGenericError( "Failed to bind local IP!", BotName );
+				}
+			} else {
+				SteamClient.Connect();
+			}
 		}
 
 		private async Task Stop() {

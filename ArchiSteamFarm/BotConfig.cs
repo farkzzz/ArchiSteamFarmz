@@ -31,6 +31,9 @@ using System.Xml;
 namespace ArchiSteamFarm {
 	internal sealed class BotConfig {
 
+		[JsonProperty]
+		internal string LocalIP { get; private set; } = null;
+
 		[JsonProperty( Required = Required.DisallowNull )]
 		internal bool AddSlaves { get; private set; } = true;
 
