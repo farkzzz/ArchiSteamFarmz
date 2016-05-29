@@ -448,6 +448,18 @@ namespace ArchiSteamFarm {
 			return bot.ResponseStatus(steamID);
 		}
 		private async Task<string> ResponseInventory( ulong steamID) {
+			if ( steamID == 0 ) {
+				return null;
+			}
+
+			if ( !IsMaster( steamID ) ) {
+				return "ERROR: Not authorized!";
+			}
+
+			if ( BotConfig.SteamMasterID == 0 ) {
+				return "Trade couldn't be send because SteamMasterID is not defined!";
+			}
+			await Trading.LimitInventoryRequestsAsync().ConfigureAwait( false );
 			var items = await ArchiWebHandler.GetMyInventories().ConfigureAwait( false );
 			string result = "";
 			foreach (var item in items) {
