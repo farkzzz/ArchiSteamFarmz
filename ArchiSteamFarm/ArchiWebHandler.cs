@@ -562,14 +562,15 @@ namespace ArchiSteamFarm {
 			return true;
 		}
 
-        internal async Task<List<Steam.Item>> GetMyTradableInventory(string inventory)
+        internal async Task<List<Steam.Item>> GetMyInventory(string inventory, bool trading)
         {
             List<Steam.Item> result = new List<Steam.Item>();
             
             JObject jObject = null;
             for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++)
             {
-                jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/"+ inventory + "/?trading=1", Cookie).ConfigureAwait(false);
+                jObject = await WebBrowser.UrlGetToJObject(SteamCommunityURL + "/my/inventory/json/"+ inventory + 
+					(trading?"/?trading=1":""), Cookie).ConfigureAwait(false);
             }
 
             if (jObject == null)
@@ -602,7 +603,18 @@ namespace ArchiSteamFarm {
 
             return result;
         }
-        internal async Task<List<ulong>> GetMyGifts()
+		internal async Task<List<Steam.Item>> GetMyInventories() {
+			List<Steam.Item> result = new List<Steam.Item>();		
+			foreach (var inventory in Bot.BotConfig.LootableInventories ) {
+				var items = GetMyInventory(inventory, false);
+				if ( items == null ) {
+					continue;
+				}
+				result.AddRange( await GetMyInventory( inventory, false ).ConfigureAwait( false ) );
+			}
+			return result;
+		}
+		internal async Task<List<ulong>> GetMyGifts()
         {
             JObject jObject = null;
             for (byte i = 0; i < WebBrowser.MaxRetries && jObject == null; i++)

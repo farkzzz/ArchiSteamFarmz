@@ -62,8 +62,17 @@ namespace ArchiSteamFarm {
 		internal string SteamTradeToken { get; private set; } = null;
 
 		[JsonProperty( Required = Required.DisallowNull )]
-		internal HashSet<string> LootableInventories { get; private set; } = new HashSet<string>( new string[] { "753/6" } );
-		
+		internal HashSet<string> LootableInventories { get; private set; } = new HashSet<string>( new string[] { 
+				//Steam
+				"753/1",	//Gifts
+				//"753/3",	//Coupons
+				"753/6",	//Community
+				//"753/7",	//Item Rewards
+				//CS:GO
+				//"730/2",	//Backpack
+				//Team Fortress 2
+				//"440/2",	//Backpack
+		} );
 		internal static BotConfig Load(string path) {
 			if (!File.Exists(path)) {
 				return null;

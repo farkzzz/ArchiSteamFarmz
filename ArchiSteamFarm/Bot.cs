@@ -250,6 +250,8 @@ namespace ArchiSteamFarm {
 						return await ResponseFarm(steamID).ConfigureAwait(false);
 					case "!loot":
 						return await ResponseLoot(steamID).ConfigureAwait(false);
+					case "!inventory":
+						return await ResponseInventory( steamID ).ConfigureAwait( false );
 					case "!rejoinchat":
 						return ResponseRejoinChat(steamID);
 					case "!restart":
@@ -445,7 +447,15 @@ namespace ArchiSteamFarm {
 
 			return bot.ResponseStatus(steamID);
 		}
-
+		private async Task<string> ResponseInventory( ulong steamID) {
+			var items = await ArchiWebHandler.GetMyInventories().ConfigureAwait( false );
+			string result = "";
+			foreach (var item in items) {
+				result += "http://steamcommunity.com/profiles/" + BotDatabase.SteamID64 + 
+					"/inventory/#" + item.appid + "_" + item.contextid + "_" + item.id + "\n";
+			}
+			return result.Length==0?"Inventory is empty!":result;
+		}
         private async Task<string> ResponseLoot(ulong steamID) {
             if (steamID == 0) {
                 return null;
@@ -475,7 +485,7 @@ namespace ArchiSteamFarm {
 
 					}
 				} else {
-					var inventorySection = await ArchiWebHandler.GetMyTradableInventory(inventory).ConfigureAwait(false);
+					var inventorySection = await ArchiWebHandler.GetMyInventory(inventory, true).ConfigureAwait(false);
 					if (inventorySection != null) {
 						inventoryItems.AddRange(inventorySection);
 					}
