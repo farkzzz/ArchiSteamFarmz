@@ -32,15 +32,6 @@ namespace ArchiSteamFarm {
 	internal sealed class BotConfig {
 
 		[JsonProperty]
-		internal string LocalIP { get; private set; } = null;
-
-		[JsonProperty( Required = Required.DisallowNull )]
-		internal bool AddSlaves { get; private set; } = true;
-
-		[JsonProperty( Required = Required.DisallowNull )]
-		internal bool AddMaster { get; private set; } = true;
-		
-		[JsonProperty]
 		internal string SteamLogin { get; set; } = null;
 
 		[JsonProperty]
@@ -48,6 +39,9 @@ namespace ArchiSteamFarm {
 
 		[JsonProperty]
 		internal string PersonaName { get; set; } = null;
+
+		[JsonProperty]
+		internal string AvatarFile { get; set; } = null;
 
 		[JsonProperty]
 		internal string SteamParentalPIN { get; set; } = "0";
@@ -64,20 +58,8 @@ namespace ArchiSteamFarm {
 		[JsonProperty( Required = Required.DisallowNull )]
 		internal bool AcceptGifts { get; private set; } = true;
 
-		[JsonProperty( Required = Required.DisallowNull )]
-		internal bool SendOnFarmingFinished { get; private set; } = true;
-
 		[JsonProperty]
 		internal string SteamTradeToken { get; private set; } = null;
-
-		[JsonProperty( Required = Required.DisallowNull )]
-		internal byte SendTradePeriod { get; private set; } = 0;
-
-		[JsonProperty( Required = Required.DisallowNull )]
-		internal byte AcceptConfirmationsPeriod { get; private set; } = 0;
-
-		[JsonProperty( Required = Required.DisallowNull )]
-		internal byte DistributeGiftsPeriod { get; private set; } = 0;
 
 		[JsonProperty( Required = Required.DisallowNull )]
 		internal HashSet<string> LootableInventories { get; private set; } = new HashSet<string>( new string[] { "753/6" } );

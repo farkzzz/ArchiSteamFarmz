@@ -63,24 +63,12 @@ namespace ArchiSteamFarm {
 		private readonly SteamFriends SteamFriends;
 		private readonly SteamUser SteamUser;
 		private readonly Trading Trading;
-
+		
 		internal bool KeepRunning { get; private set; } = false;
 
 		private bool InvalidPassword = false;
 		private bool LoggedInElsewhere = false;
 		private string AuthCode, TwoFactorAuth;
-
-		private EClanRank rank;
-
-		internal enum EClanRank
-		{
-			Owner = 4,
-			Officer = 3,
-			Moderator = 2,
-			Member = 1,
-			None = 0,
-			Unknown = -1
-		}
 
 		internal static async Task RefreshCMs(uint cellID) {			
 			bool initialized = false;
@@ -100,14 +88,6 @@ namespace ArchiSteamFarm {
 			} else {
 				Logging.LogGenericWarning("Failed to initialize list of CMs after 3 tries, ASF will use built-in SK2 list, it may take a while to connect");
 			}
-		}
-
-		private static bool IsOwner(ulong steamID) {
-			if (steamID == 0) {
-				return false;
-			}
-
-			return steamID == Program.GlobalConfig.SteamOwnerID;
 		}
 
 		private static bool IsValidCdKey(string key) {
@@ -180,11 +160,11 @@ namespace ArchiSteamFarm {
             CallbackManager.Subscribe<SteamApps.GuestPassListCallback>(OnGuestPassList);
 
             SteamFriends = SteamClient.GetHandler<SteamFriends>();
-			CallbackManager.Subscribe<SteamFriends.ChatInviteCallback>(OnChatInvite);
+			CallbackManager.Subscribe<SteamFriends.ChatInviteCallback>( OnChatInvite );
+			CallbackManager.Subscribe<SteamFriends.ChatEnterCallback>( OnChatEnter );
 			CallbackManager.Subscribe<SteamFriends.ChatMsgCallback>(OnChatMsg);
 			CallbackManager.Subscribe<SteamFriends.FriendsListCallback>(OnFriendsList);
 			CallbackManager.Subscribe<SteamFriends.FriendMsgCallback>(OnFriendMsg);
-			CallbackManager.Subscribe<SteamFriends.FriendMsgHistoryCallback>(OnFriendMsgHistory);
 
 			SteamUser = SteamClient.GetHandler<SteamUser>();
 			CallbackManager.Subscribe<SteamUser.AccountInfoCallback>(OnAccountInfo);
@@ -199,34 +179,6 @@ namespace ArchiSteamFarm {
 			ArchiWebHandler = new ArchiWebHandler(this);
 			CardsFarmer = new CardsFarmer(this);
 			Trading = new Trading(this);
-
-			if ( BotConfig.AcceptConfirmationsPeriod > 0 && AcceptConfirmationsTimer == null ) {
-				AcceptConfirmationsTimer = new Timer(
-					async e => await AcceptConfirmations().ConfigureAwait( false ),
-					null,
-					TimeSpan.FromMinutes( BotConfig.AcceptConfirmationsPeriod ), // Delay
-					TimeSpan.FromMinutes( BotConfig.AcceptConfirmationsPeriod ) // Period
-				);
-			}
-
-			if ( BotConfig.SendTradePeriod > 0 && SendItemsTimer == null ) {
-				SendItemsTimer = new Timer(
-					async e => await ResponseLoot( BotConfig.SteamMasterID ).ConfigureAwait( false ),
-					null,
-					TimeSpan.FromHours( BotConfig.SendTradePeriod ), // Delay
-					TimeSpan.FromHours( BotConfig.SendTradePeriod ) // Period
-				);
-			}
-
-			if ( BotConfig.DistributeGiftsPeriod > 0 && DistributeGiftsTimer == null ) {
-				DistributeGiftsTimer = new Timer(
-					async e => await DistributeGifts().ConfigureAwait( false ),
-					null,
-					TimeSpan.FromHours( BotConfig.SendTradePeriod ), // Delay
-					TimeSpan.FromHours( BotConfig.SendTradePeriod ) // Period
-				);
-			}
-
 			Start().Wait();
 		}
 
@@ -236,34 +188,8 @@ namespace ArchiSteamFarm {
 			}
 
 			return steamID == BotConfig.SteamMasterID;
-		}
-		public bool IsSlave( ulong steamID ) {
-			if ( steamID == 0 ) {
-				return false;
-			}
-			foreach ( var botPair in Bots ) {
-				var bot = botPair.Value;
-				
-				if ( bot.IsMaster( this.SteamUser.SteamID.ConvertToUInt64() ) ) {
-					return true;
-				}
-			}
-			return false;
-		}
-		internal async Task<string> DistributeGifts() {
-			List<uint> allowedIDs = new List<uint>();
-			foreach (var bot in Bots.Values) {
-				if ( bot == null || bot.BotDatabase.SteamID64 == 0 || this.BotDatabase.SteamID64 == 0
-					|| bot.BotDatabase.AccountID == 0 || this.BotDatabase.AccountID == 0) {
-					continue;
-				}
-				if ( bot.IsMaster( this.BotDatabase.SteamID64 )) {
-					allowedIDs.Add( bot.BotDatabase.AccountID );
-				}
-			}
-			await ArchiWebHandler.DistributeGiftsTo( allowedIDs ).ConfigureAwait( false );
-			return "Sent!";
-		}
+		}		
+		
 		internal async Task AcceptConfirmations(Confirmation.ConfirmationType allowedConfirmationType = Confirmation.ConfirmationType.Unknown) {
 			if (BotDatabase.SteamGuardAccount == null) {
 				return;
@@ -296,18 +222,13 @@ namespace ArchiSteamFarm {
 			}
 		}
 
-		[Obsolete]
-		internal void ResetGamesPlayed() {
-			
-		}
-
 		internal async Task Restart() {
 			await Stop().ConfigureAwait(false);
 			await Start().ConfigureAwait(false);
 		}
 
 		internal async Task OnFarmingFinished(bool farmedSomething) {
-			if (farmedSomething && BotConfig.SendOnFarmingFinished) {
+			if (farmedSomething) {
 				await ResponseLoot(BotConfig.SteamMasterID).ConfigureAwait(false);
 			}
 		}
@@ -323,14 +244,6 @@ namespace ArchiSteamFarm {
 
 			if (!message.Contains(" ")) {
 				switch (message) {
-					case "!2fa":
-						return Response2FA( steamID );
-					case "!2faoff":
-						return Response2FAOff(steamID);
-					case "!2faok":
-						return await Response2FAOK( steamID ).ConfigureAwait( false );
-					case "!sendgifts":
-						return await DistributeGifts( ).ConfigureAwait( false );
 					case "!exit":
 						return ResponseExit(steamID);
 					case "!farm":
@@ -343,10 +256,6 @@ namespace ArchiSteamFarm {
 						return ResponseRestart(steamID);
 					case "!status":
 						return ResponseStatus(steamID);
-					case "!rank":
-						return ResponseRank( steamID );
-					case "!statusall":
-						return ResponseStatusAll(steamID);
 					case "!stop":
 						return await ResponseStop(steamID).ConfigureAwait(false);
 					default:
@@ -354,15 +263,7 @@ namespace ArchiSteamFarm {
 				}
 			} else {
 				string[] args = message.Split(' ');
-				switch (args[0]) {
-					case "!2fa":
-						return Response2FA(steamID, args[1]);
-					case "!rank":
-						return await ResponseRank( steamID, args[1] ).ConfigureAwait(false);
-					case "!2faoff":
-						return Response2FAOff(steamID, args[1]);
-					case "!2faok":
-						return await Response2FAOK(steamID, args[1]).ConfigureAwait(false);
+				switch (args[0]) {					
 					case "!addlicense":
 						if (args.Length > 2) {
 							return await ResponseAddLicense(steamID, args[1], args[2]).ConfigureAwait(false);
@@ -402,6 +303,12 @@ namespace ArchiSteamFarm {
 						return await ArchiWebHandler.SharedFileVote( "up", args[1] ).ConfigureAwait( false );
 					case "!votedown":
 						return await ArchiWebHandler.SharedFileVote( "down", args[1] ).ConfigureAwait( false );
+					case "!addtowishlist":
+						return await ArchiWebHandler.WishlistManage( "add", args[1] ).ConfigureAwait( false );
+					case "!removefromwishlist":
+						return await ArchiWebHandler.WishlistManage( "remove", args[1] ).ConfigureAwait( false );
+					case "!openurl":
+						return await ArchiWebHandler.OpenUrl( args[1] ).ConfigureAwait( false );
 					default:
 						return "Unrecognized command: " + args[0];
 				}
@@ -424,31 +331,7 @@ namespace ArchiSteamFarm {
 			if (TwoFactorAuth == null) {
 				await Program.LimitSteamRequestsAsync().ConfigureAwait(false);
 			}
-
-			
-
-			if ( BotConfig.LocalIP != null ) {
-				//https://github.com/SteamRE/SteamKit/issues/83#issuecomment-70038392
-				//so its time to rape steamkit
-				Socket socket;
-				var ip = BitConverter.ToInt32( IPAddress.Parse( BotConfig.LocalIP ).GetAddressBytes(), 0 );
-				var localEndPoint = new IPEndPoint(ip, 0);
-				BindingFlags bindFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
-				var connection = typeof(CMClient).GetField("connection", bindFlags).GetValue( SteamClient );
-				FieldInfo socketField = connection.GetType().GetField( "socket", bindFlags );
-				SteamClient.Connect();
-				do {
-					socket = socketField.GetValue( connection ) as Socket;
-				} while ( socket == null );
-				try {
-					socket.Bind( localEndPoint );
-					//ayy lmao
-				} catch (Exception e) {
-					Logging.LogGenericError( "Failed to bind local IP!", BotName );
-				}
-			} else {
-				SteamClient.Connect();
-			}
+			SteamClient.Connect();
 		}
 
 		private async Task Stop() {
@@ -547,57 +430,20 @@ namespace ArchiSteamFarm {
 				return "Bot " + BotName + " is currently not farming anything.";
 			}
 		}
-		private async Task<string> ResponseRank( ulong steamID, string profileID ) {
-			if ( steamID == 0 ) {
-				return null;
-			}
-			EClanRank rank = await ArchiWebHandler.GetProfileRank( UInt64.Parse(profileID) ).ConfigureAwait( false );
 
-			return "Rank: " + rank.ToString( "g" );
-		}
-		private string ResponseRank( ulong steamID ) {
-			if ( steamID == 0 ) {
-				return null;
-			}
-			return "Bot's rank: " + rank.ToString( "g" );
-		}
-
-		private static string ResponseStatus(ulong steamID, string botName) {
+		private string ResponseStatus(ulong steamID, string botName) {
 			if (steamID == 0 || string.IsNullOrEmpty(botName)) {
 				return null;
 			}
-
+			if (!IsMaster( steamID )) {
+				return "ERROR: Not authorized!";
+			}
 			Bot bot;
 			if (!Bots.TryGetValue(botName, out bot)) {
 				return "Couldn't find any bot named " + botName + "!";
 			}
 
 			return bot.ResponseStatus(steamID);
-		}
-
-		private static string ResponseStatusAll(ulong steamID) {
-			if (steamID == 0) {
-				return null;
-			}
-
-			if (!IsOwner(steamID)) {
-				return "ERROR: Not authorized!";
-			}
-
-			StringBuilder result = new StringBuilder(Environment.NewLine);
-
-			int totalBotsCount = Bots.Count;
-			int runningBotsCount = 0;
-
-			foreach (Bot bot in Bots.Values) {
-				result.Append(bot.ResponseStatus(steamID) + Environment.NewLine);
-				if (bot.KeepRunning) {
-					runningBotsCount++;
-				}
-			}
-
-			result.Append("There are " + totalBotsCount + " bots initialized and " + runningBotsCount + " of them are currently running.");
-			return result.ToString();
 		}
 
         private async Task<string> ResponseLoot(ulong steamID) {
@@ -642,7 +488,11 @@ namespace ArchiSteamFarm {
 					itemsCount += tradeResult;
 				}
 			}
-			return itemsCount + " items out of " + (inventoryItems.Count + gifts.Count) + " were sent!";
+			if ( inventoryItems.Count + gifts.Count != 0 ) {
+				return itemsCount + " items out of " + (inventoryItems.Count + gifts.Count) + " were sent!";
+			} else {
+				return "Nothing to send, inventory seems empty!";
+			}
         }
 
 		private static async Task<string> ResponseLoot(ulong steamID, string botName) {
@@ -656,107 +506,14 @@ namespace ArchiSteamFarm {
 			}
 
 			return await bot.ResponseLoot(steamID).ConfigureAwait(false);
-		}
+		}		
 
-		private string Response2FA(ulong steamID) {
+		private string ResponseExit(ulong steamID) {
 			if (steamID == 0) {
 				return null;
 			}
 
 			if (!IsMaster(steamID)) {
-				return "ERROR: Not authorized!";
-			}
-
-			if (BotDatabase.SteamGuardAccount == null) {
-				return "That bot doesn't have ASF 2FA enabled!";
-			}
-
-			long timeLeft = 30 - TimeAligner.GetSteamTime() % 30;
-			return "2FA Token: " + BotDatabase.SteamGuardAccount.GenerateSteamGuardCode() + " (expires in " + timeLeft + " seconds)";
-		}
-
-		private static string Response2FA(ulong steamID, string botName) {
-			if (steamID == 0 || string.IsNullOrEmpty(botName)) {
-				return null;
-			}
-
-			Bot bot;
-			if (!Bots.TryGetValue(botName, out bot)) {
-				return "Couldn't find any bot named " + botName + "!";
-			}
-
-			return bot.Response2FA(steamID);
-		}
-
-		private string Response2FAOff(ulong steamID) {
-			if (steamID == 0) {
-				return null;
-			}
-
-			if (!IsMaster(steamID)) {
-				return "ERROR: Not authorized!";
-			}
-
-			if (BotDatabase.SteamGuardAccount == null) {
-				return "That bot doesn't have ASF 2FA enabled!";
-			}
-
-			if (DelinkMobileAuthenticator()) {
-				return "Done! Bot is no longer using ASF 2FA";
-			} else {
-				return "Something went wrong during delinking mobile authenticator!";
-			}
-		}
-
-		private static string Response2FAOff(ulong steamID, string botName) {
-			if (steamID == 0 || string.IsNullOrEmpty(botName)) {
-				return null;
-			}
-
-			Bot bot;
-			if (!Bots.TryGetValue(botName, out bot)) {
-				return "Couldn't find any bot named " + botName + "!";
-			}
-
-			return bot.Response2FAOff(steamID);
-		}
-
-		private async Task<string> Response2FAOK(ulong steamID) {
-			if (steamID == 0) {
-				return null;
-			}
-
-			if (!IsMaster(steamID)) {
-				return "ERROR: Not authorized!";
-			}
-
-			if (BotDatabase.SteamGuardAccount == null) {
-				return "That bot doesn't have ASF 2FA enabled!";
-			}
-
-			await AcceptConfirmations().ConfigureAwait(false);
-			return "Done!";
-		}
-
-		private static async Task<string> Response2FAOK(ulong steamID, string botName) {
-			if (steamID == 0 || string.IsNullOrEmpty(botName)) {
-				return null;
-			}
-
-			Bot bot;
-			if (!Bots.TryGetValue(botName, out bot)) {
-				return "Couldn't find any bot named " + botName + "!";
-			}
-
-			return await bot.Response2FAOK(steamID).ConfigureAwait(false);
-		}
-
-		private static string ResponseExit(ulong steamID) {
-			if (steamID == 0) {
-				return null;
-			}
-
-			if (!IsOwner(steamID)) {
 				return "ERROR: Not authorized!";
 			}
 
@@ -871,12 +628,12 @@ namespace ArchiSteamFarm {
 			return await bot.ResponseRedeem(steamID, message, validate).ConfigureAwait(false);
 		}
 
-		private static string ResponseRejoinChat(ulong steamID) {
+		private string ResponseRejoinChat(ulong steamID) {
 			if (steamID == 0) {
 				return null;
 			}
 
-			if (!IsOwner(steamID)) {
+			if (!IsMaster(steamID)) {
 				return "ERROR: Not authorized!";
 			}
 
@@ -887,12 +644,12 @@ namespace ArchiSteamFarm {
 			return "Done!";
 		}
 
-		private static string ResponseRestart(ulong steamID) {
+		private string ResponseRestart(ulong steamID) {
 			if (steamID == 0) {
 				return null;
 			}
 
-			if (!IsOwner(steamID)) {
+			if (!IsMaster(steamID)) {
 				return "ERROR: Not authorized!";
 			}
 
@@ -1020,7 +777,7 @@ namespace ArchiSteamFarm {
 
 			if (gameIDs.Contains(0)) {
 				if (await CardsFarmer.SwitchToManualMode(false).ConfigureAwait(false)) {
-					ResetGamesPlayed();
+					ArchiHandler.PlayGames( new uint[] { 0 } );
 				}
 			} else {
 				await CardsFarmer.SwitchToManualMode(true).ConfigureAwait(false);
@@ -1258,23 +1015,6 @@ namespace ArchiSteamFarm {
 
 			Logging.LogGenericInfo("Logging in...", BotName);
 
-			// TODO: Please remove me immediately after https://github.com/SteamRE/SteamKit/issues/254 gets fixed
-			if (Program.GlobalConfig.HackIgnoreMachineID) {
-				Logging.LogGenericWarning("Using workaround for broken GenerateMachineID()!", BotName);
-				ArchiHandler.HackedLogOn(new SteamUser.LogOnDetails {
-					Username = BotConfig.SteamLogin,
-					Password = BotConfig.SteamPassword,
-					AuthCode = AuthCode,
-					LoginID = LoginID,
-					LoginKey = BotDatabase.LoginKey,
-					TwoFactorCode = TwoFactorAuth,
-					SentryFileHash = sentryHash,
-					ShouldRememberPassword = true,
-                    CellID = Program.GlobalDatabase.CellID
-				});
-				return;
-			}
-
 			SteamUser.LogOn(new SteamUser.LogOnDetails {
 				Username = BotConfig.SteamLogin,
 				Password = BotConfig.SteamPassword,
@@ -1351,23 +1091,21 @@ namespace ArchiSteamFarm {
                 {
                     continue;
                 }
-
-                Logging.LogGenericInfo("Accepting gift: " + gid + "...", BotName);
-                var acceptResult = await ArchiWebHandler.AcceptGift(gid).ConfigureAwait(false);
-                if (acceptResult > 0)
-                {                                    
-                    if (acceptResult > 1 && BotConfig.SteamMasterID != 0)
-                    {
-                        Logging.LogGenericInfo("Gift added in invenetory "+ acceptResult + "!", BotName);
-                    } else
-                    {
-                        acceptedSomething = true;
-                        Logging.LogGenericInfo("Success!", BotName);
-                    }
-                }
-                else {
-                    Logging.LogGenericInfo("Failed!", BotName);
-                }
+				if (await ArchiWebHandler.ValidateGiftUnpack(gid)) {
+					Logging.LogGenericInfo( "Accepting gift: " + gid + "...", BotName );
+					if ( await ArchiWebHandler.AcceptGift( gid ).ConfigureAwait( false ) > 0 ) {						
+						Logging.LogGenericInfo( "Success!", BotName );
+					} else {
+						Logging.LogGenericInfo( "Failed!", BotName );
+					}
+				} else {
+					Logging.LogGenericInfo( "Declining gift: " + gid + "...", BotName );
+					if ( await ArchiWebHandler.DeclineGift( gid ).ConfigureAwait( false ) ) {
+						Logging.LogGenericInfo( "Success!", BotName );
+					} else {
+						Logging.LogGenericInfo( "Failed!", BotName );
+					}
+				}
             }
 
             if (acceptedSomething)
@@ -1376,16 +1114,26 @@ namespace ArchiSteamFarm {
             }
         }
 
-        private void OnChatInvite(SteamFriends.ChatInviteCallback callback) {
-			if (callback == null) {
+		private void OnChatInvite( SteamFriends.ChatInviteCallback callback ) {
+			if ( callback == null ) {
 				return;
 			}
 
-			if (!IsMaster(callback.PatronID)) {
+			if ( !IsMaster( callback.PatronID ) ) {
 				return;
 			}
 
-			SteamFriends.JoinChat(callback.ChatRoomID);
+			SteamFriends.JoinChat( callback.ChatRoomID );
+		}
+		private void OnChatEnter( SteamFriends.ChatEnterCallback callback ) {
+			if ( callback == null ) {
+				return;
+			}
+
+			if ( callback.EnterResponse == EChatRoomEnterResponse.Success ) {
+				return;
+			}
+			Logging.LogGenericWarning( "Can't enter chat: " + callback.EnterResponse + "!", BotName );
 		}
 
 		private async void OnChatMsg(SteamFriends.ChatMsgCallback callback) {
@@ -1414,47 +1162,15 @@ namespace ArchiSteamFarm {
 		private void OnFriendsList(SteamFriends.FriendsListCallback callback) {
 			if (callback == null) {
 				return;
-			}
-			bool isMasterInFriendList = false;
-				 
+			}				 
 			foreach (var friend in callback.FriendList) {	
-				if (IsMaster( friend.SteamID.ConvertToUInt64())) {
-					isMasterInFriendList = true;
-				}			
 				if (friend.Relationship != EFriendRelationship.RequestRecipient) {
 					continue;
 				}
-
-				switch (friend.SteamID.AccountType) {
-					case EAccountType.Clan:
-						// TODO: Accept clan invites from master?
-						break;
-					default:
-						if ( IsMaster(friend.SteamID) ) {
-							SteamFriends.AddFriend( friend.SteamID );
-							break;
-						}
-						if ( BotConfig.AddSlaves && IsSlave( friend.SteamID ) ) {
-							SteamFriends.AddFriend( friend.SteamID );
-							break;
-						}
-						break;
-						
-				}
-			}
-
-			if (BotConfig.SteamMasterID != 0 && !isMasterInFriendList) {
-				foreach (var bot in Bots.Values ) {
-					if ( bot.BotDatabase.SteamID64 == this.BotConfig.SteamMasterID && bot.BotConfig.AddSlaves) {
-						bot.SteamFriends.AddFriend( bot.BotDatabase.SteamID64 );
-						break;
-					}
-				}
-				//In the case if master dont use bot
-				if ( BotConfig.AddMaster ) {
-					SteamFriends.AddFriend( BotConfig.SteamMasterID );
-				}
-			}
+				if ( IsMaster(friend.SteamID) ) {
+					SteamFriends.AddFriend( friend.SteamID );
+				}		
+			}			
 		}
 
 		private async void OnFriendMsg(SteamFriends.FriendMsgCallback callback) {
@@ -1471,41 +1187,7 @@ namespace ArchiSteamFarm {
 			}
 
 			await HandleMessage(callback.Sender, callback.Sender, callback.Message).ConfigureAwait(false);
-		}
-
-		private async void OnFriendMsgHistory(SteamFriends.FriendMsgHistoryCallback callback) {
-			if (callback == null) {
-				return;
-			}
-
-			if (callback.Result != EResult.OK) {
-				return;
-			}
-
-			if (!IsMaster(callback.SteamID)) {
-				return;
-			}
-
-			if (callback.Messages.Count == 0) {
-				return;
-			}
-
-			// Get last message
-			var lastMessage = callback.Messages[callback.Messages.Count - 1];
-
-			// If message is read already, return
-			if (!lastMessage.Unread) {
-				return;
-			}
-
-			// If message is too old, return
-			if (DateTime.UtcNow.Subtract(lastMessage.Timestamp).TotalMinutes > 1) {
-				return;
-			}
-
-			// Handle the message
-			await HandleMessage(callback.SteamID, callback.SteamID, lastMessage.Message).ConfigureAwait(false);
-		}
+		}		
 
 		private void OnAccountInfo(SteamUser.AccountInfoCallback callback) {
 			if (callback == null) {
@@ -1575,7 +1257,7 @@ namespace ArchiSteamFarm {
 					AuthCode = null;
 					TwoFactorAuth = null;
 
-					ResetGamesPlayed();
+					ArchiHandler.PlayGames(new uint[] { 0 } );
 
 					if (string.IsNullOrEmpty(BotConfig.SteamParentalPIN)) {
 						BotConfig.SteamParentalPIN = Program.GetUserInput(BotName, Program.EUserInputType.SteamParentalPIN);
@@ -1591,7 +1273,6 @@ namespace ArchiSteamFarm {
 					if (BotConfig.SteamMasterClanID != 0) {
 						ulong steamID64 = callback.ClientSteamID.ConvertToUInt64();
 						await ArchiWebHandler.JoinClan( BotConfig.SteamMasterClanID ).ConfigureAwait( false );
-						rank = await ArchiWebHandler.GetProfileRank( steamID64 ).ConfigureAwait( false );
 						JoinMasterChat();
 					}
 
@@ -1658,7 +1339,7 @@ namespace ArchiSteamFarm {
 			}
 		}
 
-		private async void OnNotifications(ArchiHandler.NotificationsCallback callback) {
+		private void OnNotifications(ArchiHandler.NotificationsCallback callback) {
 			if (callback == null || callback.Notifications == null) {
 				return;
 			}

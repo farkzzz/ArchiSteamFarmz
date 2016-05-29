@@ -167,6 +167,7 @@ namespace ArchiSteamFarm {
 
 			if (!await IsAnythingToFarm().ConfigureAwait(false)) {
 				Semaphore.Release(); // We have nothing to do, don't forget to release semaphore
+				Bot.ArchiHandler.PlayGames(new uint[] { 0 });
 				Logging.LogGenericInfo("We don't have anything to farm on this account!", Bot.BotName);
 				return;
 			}
@@ -228,6 +229,7 @@ namespace ArchiSteamFarm {
 				Task.Run(async () => await StartFarming().ConfigureAwait(false)).Forget();
 				return;
 			}
+			Bot.ArchiHandler.PlayGames( new uint[] { 0 } );
 
 			Logging.LogGenericInfo("Farming finished!", Bot.BotName);
 			await Bot.OnFarmingFinished(farmedSomething).ConfigureAwait(false);
@@ -433,7 +435,7 @@ namespace ArchiSteamFarm {
 				Logging.LogGenericInfo("Still farming: " + appID, Bot.BotName);
 			}
 
-			Bot.ResetGamesPlayed();
+			Bot.ArchiHandler.PlayGames( new uint[] { 0 } );
 			Logging.LogGenericInfo("Stopped farming: " + appID, Bot.BotName);
 			return success;
 		}
@@ -466,7 +468,7 @@ namespace ArchiSteamFarm {
 				maxHour += timePlayed;
 			}
 
-			Bot.ResetGamesPlayed();
+			Bot.ArchiHandler.PlayGames( new uint[] { 0 } );
 			Logging.LogGenericInfo("Stopped farming: " + string.Join(", ", appIDs), Bot.BotName);
 			return success;
 		}

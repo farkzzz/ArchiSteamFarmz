@@ -37,12 +37,6 @@ namespace ArchiSteamFarm {
 		internal bool Debug { get; private set; } = false;
 
 		[JsonProperty(Required = Required.DisallowNull)]
-		internal bool AutoUpdates { get; private set; } = false;
-
-		[JsonProperty(Required = Required.DisallowNull)]
-		internal ulong SteamOwnerID { get; private set; } = 0;
-
-		[JsonProperty(Required = Required.DisallowNull)]
 		internal byte MaxFarmingTime { get; private set; } = 10;
 
 		[JsonProperty(Required = Required.DisallowNull)]
@@ -67,17 +61,13 @@ namespace ArchiSteamFarm {
 		internal byte HttpTimeout { get; private set; } = 60;
 
 		[JsonProperty(Required = Required.DisallowNull)]
-		internal string WCFHostname { get; private set; } = "localhost";
+		internal string WCFHostname { get; private set; } = "127.0.0.1";
 
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal ushort WCFPort { get; private set; } = 1242;
 
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal bool LogToFile { get; private set; } = true;
-
-		// TODO: Please remove me immediately after https://github.com/SteamRE/SteamKit/issues/254 gets fixed
-		[JsonProperty(Required = Required.DisallowNull)]
-		internal bool HackIgnoreMachineID { get; private set; } = false;
 
 		[JsonProperty(Required = Required.DisallowNull)]
 		internal HashSet<uint> Blacklist { get; private set; } = new HashSet<uint>(GlobalBlacklist);

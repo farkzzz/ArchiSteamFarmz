@@ -259,6 +259,36 @@ namespace ArchiSteamFarm {
 			}
 
 			return result;
+		}		
+		internal async Task<bool> ValidateGiftUnpack( ulong gid ) {
+			if ( gid == 0 ) {
+				return false;
+			}
+			string request = SteamCommunityURL + "/gifts/" + gid + "/validateunpack";
+
+			JObject response = null;
+			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
+				response = await WebBrowser.UrlGetToJObject( request, Cookie ).ConfigureAwait( false );
+			}
+
+			if ( response == null ) {
+				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
+				return false;
+			}			
+			if ( response["success"] != null && response["success"].ToString() == "1" ) {
+				bool owned = true;
+				if ( response["owned"] != null ) {
+					owned = (bool)response["owned"];
+				}
+				if ( response["foo"] != null && response["foo"]["completely_owned"] != null) {
+					owned |= (bool)response["foo"]["completely_owned"];
+				}
+				if ( response["owned"] != null ) {
+					owned |= (bool)response["foo"]["partially_owned"];
+				}
+				return !owned;
+			}
+			return false;
 		}
 		//TODO perform succes code and error check
         internal async Task<ulong> AcceptGift(ulong gid)
@@ -296,12 +326,61 @@ namespace ArchiSteamFarm {
                 return 0;
             }          
             JObject objResponse = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
-            if (objResponse["gidgiftnew"] != null)
+            if ( objResponse["success"] != null && objResponse["success"].ToString() != "1" && objResponse["gidgiftnew"] != null)
             {
                 return UInt64.Parse(objResponse["gidgiftnew"].ToString());
             }
             return 1;
         }
+		internal async Task <bool> DeclineGift(ulong gid) {
+			if ( gid == 0 ) {
+				return false;
+			}
+
+			string sessionID;
+			if ( !Cookie.TryGetValue( "sessionid", out sessionID ) ) {
+				return false;
+			}
+			if ( string.IsNullOrEmpty( sessionID ) ) {
+				Logging.LogNullError( "sessionID" );
+				return false;
+			}
+			string giftsPage = null;
+			for ( byte i = 0; i < WebBrowser.MaxRetries && giftsPage == null; i++ ) {
+				giftsPage = await WebBrowser.UrlGetToContent( SteamCommunityURL + "/gifts/", Cookie ).ConfigureAwait( false );
+			}
+			ulong senderID = 0;
+			string needle = "ShowDeclineGiftOptions( '"+gid+"', '";
+			if (giftsPage.IndexOf(needle) > 0) {
+				string sender = giftsPage.Substring(
+					giftsPage.IndexOf(needle) + needle.Length,
+					17);
+				if ( !UInt64.TryParse( sender, out senderID ) ) {
+					return false;
+				};
+			} else {
+				return false;
+			}
+
+			string request = SteamCommunityURL + "/gifts/" + gid + "/decline";
+			Dictionary<string, string> data = new Dictionary<string, string>(1) {
+				{ "sessionid", sessionID },
+				{ "steamid_sender",  senderID.ToString()},
+				{ "note", "" }
+			};
+
+			HttpResponseMessage response = null;
+			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
+				response = await WebBrowser.UrlPost( request, data, Cookie ).ConfigureAwait( false );
+			}
+
+			if ( response == null ) {
+				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
+				return false;
+			}
+
+			return true;
+		}
 		internal async Task<bool> SendGift( uint recipientAccountID, ulong gid ) {
 			if ( gid == 0 ) {
 				return false;
@@ -341,8 +420,6 @@ namespace ArchiSteamFarm {
 			return true;
 		}
 		internal async Task<string> SharedFileVote( string vote, string fileId ) {
-			ulong id;
-			
 			string sessionID;
 			if ( !Cookie.TryGetValue( "sessionid", out sessionID ) ) {
 				return "Error: no sessionid!";
@@ -370,6 +447,53 @@ namespace ArchiSteamFarm {
 
 			return "Voted!";
 		}
+		internal async Task<string> OpenUrl( string url ) {
+			HttpResponseMessage response = null;			
+			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
+				response = await WebBrowser.UrlGet( url, Cookie ).ConfigureAwait( false );
+			}
+
+			if ( response == null ) {
+				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
+				return "Request failed even after " + WebBrowser.MaxRetries + " tries!";
+			}
+
+			return "Opened!";
+		}
+		public async Task<string> WishlistManage( string action, string appId ) {
+			string sessionID;
+			if ( !Cookie.TryGetValue( "sessionid", out sessionID ) ) {
+				return "Error: no sessionid!";
+			}
+			if ( string.IsNullOrEmpty( sessionID ) ) {
+				Logging.LogNullError( "sessionID" );
+				return "Error: sessionid is null or empty!";
+			}
+
+			string request;
+			if ( action == "add" ) {
+				request = "http://store.steampowered.com/api/addtowishlist";
+			} else {
+				request = "http://store.steampowered.com/api/removefromwishlist";
+			}
+			Dictionary<string, string> data = new Dictionary<string, string>(2) {
+				{"appid", appId},
+				{"sessionid", sessionID}
+			};
+
+			HttpResponseMessage response = null;
+			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
+				response = await WebBrowser.UrlPost( request, data, Cookie ).ConfigureAwait( false );
+			}
+
+			if ( response == null ) {
+				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
+				return "Request failed even after " + WebBrowser.MaxRetries + " tries!";
+			}
+
+			return action == "add" ? "Added!" : "Removed!";
+		}
+
 		internal async Task<bool> SendGift(ulong recipientProfileID, ulong gid)
         {
 			var recipientID3 = new SteamID();
@@ -428,36 +552,6 @@ namespace ArchiSteamFarm {
 			HttpResponseMessage response = null;
 			for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++) {
 				response = await WebBrowser.UrlPost(request, data, Cookie, referer).ConfigureAwait(false);
-			}
-
-			if (response == null) {
-				Logging.LogGenericWTF("Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName);
-				return false;
-			}
-
-			return true;
-		}
-
-		internal bool DeclineTradeOffer(ulong tradeID) {
-			if (tradeID == 0 || string.IsNullOrEmpty( Bot.BotDatabase.SteamApiKey )) {
-				return false;
-			}
-
-			KeyValue response = null;
-			using (dynamic iEconService = WebAPI.GetInterface("IEconService", Bot.BotDatabase.SteamApiKey )) {
-				iEconService.Timeout = Timeout;
-
-				for (byte i = 0; i < WebBrowser.MaxRetries && response == null; i++) {
-					try {
-						response = iEconService.DeclineTradeOffer(
-							tradeofferid: tradeID.ToString(),
-							method: WebRequestMethods.Http.Post,
-							secure: !Program.GlobalConfig.ForceHttp
-						);
-					} catch (Exception e) {
-						Logging.LogGenericException(e, Bot.BotName);
-					}
-				}
 			}
 
 			if (response == null) {
@@ -544,57 +638,7 @@ namespace ArchiSteamFarm {
 
             return result;
         }
-		internal async Task<List<uint>> GetFreindsWhichDontOwn ( ulong giftID ) {
-			var accountIDs = new List<uint>();
-
-			HtmlDocument sendGiftPage = await WebBrowser.UrlGetToHtmlDocument("https://store.steampowered.com/checkout/sendgift/" + giftID, Cookie).ConfigureAwait( false );
-
-			var memberBlocks = sendGiftPage.DocumentNode.SelectSingleNode( "//div[@id='friends_chooser']" );
-			foreach ( var memberBlockNode in memberBlocks.ChildNodes ) {
-				uint accountID;
-				if ( memberBlockNode.Name != "div" ) {
-					continue;
-				}
-				if( memberBlockNode.Attributes["class"] == null
-					|| !memberBlockNode.Attributes["class"].Value.Contains( "friend_block" )
-					|| !UInt32.TryParse( memberBlockNode.Id.Substring( 13 ), out accountID )
-				) {
-					continue;
-				}
-				if (false
-					|| memberBlockNode.Attributes["class"].Value.Contains( "friend_status_offline" ) ) {
-					continue;
-				}
-				bool owns = false;
-				//bs I can lmao
-				foreach (var block in memberBlockNode.ChildNodes) {
-					if (block.Attributes["class"] != null && block.Attributes["class"].Value.Contains( "already_owns" ) ) {
-						owns = true;
-						break;
-					}
-				}
-				if ( !owns ) {
-					accountIDs.Add( accountID );
-				}
-			}
-			return accountIDs;
-		}
-		internal async Task DistributeGiftsTo ( List<uint> allowedAccountIDs ) {
-			var giftIDs = await GetMyGifts().ConfigureAwait( false );
-			foreach (var giftID in giftIDs) {
-				var dontOwn = await GetFreindsWhichDontOwn( giftID ).ConfigureAwait( false );
-				if (dontOwn.Count == 0) {
-					continue;
-				}
-				foreach (var accountID in dontOwn) {
-					if ( allowedAccountIDs.Contains( accountID )) {
-						await SendGift( accountID, giftID ).ConfigureAwait( false );
-						break;
-					}
-				} 
-			}
-		}
-
+		
 		internal async Task<int> SendTradeOffer(List<Steam.Item> inventory, ulong partnerID, string token = null) {
 			if (inventory == null || inventory.Count == 0 || partnerID == 0) {
 				return -1;
@@ -725,145 +769,7 @@ namespace ArchiSteamFarm {
 
 			return htmlDocument;
 		}
-
-		internal async Task<string> GetProfileName( ulong steamID ) {
-			if ( steamID == 0 ) {
-				return null;
-			}
-
-			string request = SteamCommunityURL + "/profiles/" + steamID + "/?xml=1";
-
-			XmlDocument response = null;
-			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
-				response = await WebBrowser.UrlGetToXML( request, Cookie ).ConfigureAwait( false );
-			}
-
-			if ( response == null ) {
-				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
-				return null;
-			}
-
-			var xmlNode = response.SelectSingleNode("profile/steamID");
-			if ( xmlNode == null ) {
-				return null;
-			}
-			return xmlNode.InnerText;
-		}
-		internal  async Task<List<ulong>> GetMasterClanMembers( ) {
-			var result = new List<ulong>();
-
-			if (Bot.BotConfig.SteamMasterClanID == 0) {
-				return result;
-			}	
-
-			string request = SteamCommunityURL + "/gid/" + Bot.BotConfig.SteamMasterClanID + "/memberslistxml/?xml=1";
-
-			XmlDocument response = null;
-			for ( byte i = 0; i < WebBrowser.MaxRetries && response == null; i++ ) {
-				response = await WebBrowser.UrlGetToXML( request, Cookie ).ConfigureAwait( false );
-			}
-
-			if ( response == null ) {
-				Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
-				return result;
-			}
-
-			XmlNodeList xmlNodeList = response.SelectNodes("memberList/members/steamID64");
-			if ( xmlNodeList == null || xmlNodeList.Count == 0 ) {
-				return result;
-			}
-
-			
-			foreach ( XmlNode xmlNode in xmlNodeList ) {
-				string memberNode = xmlNode.InnerText;
-				if ( memberNode == null ) {
-					continue;
-				}
-
-				ulong memberID;
-				if ( !ulong.TryParse( memberNode, out memberID ) ) {
-					continue;
-				}
 				
-				result.Add( memberID );
-
-			}
-
-			return result;
-		}
-		internal async Task<Bot.EClanRank> GetProfileRank( ulong profileID64 ) {
-			var rank = Bot.EClanRank.None;
-			if ( profileID64 == 0 ) {
-				return rank;
-			}
-			SteamID profileID = new SteamID();
-			profileID.SetFromUInt64( profileID64 );
-
-			//check if given profile is clan member
-			List<ulong> clanMembers = await GetMasterClanMembers().ConfigureAwait(false);
-			if (!clanMembers.Contains( profileID64 ) ) {
-				return rank;
-			}
-
-			//so given profile is clan member. 
-			rank = Bot.EClanRank.Member;
-
-			//lets find out his rank:
-			//getting his profile name
-			string profileName = await GetProfileName(profileID64).ConfigureAwait(false);
-			if (profileName == null) {
-				return rank;
-			}
-
-			//searching in group members			
-			var pages = new List<string>();
-			pages.Add( SteamCommunityURL + "/gid/" + Bot.BotConfig.SteamMasterClanID + "/members?searchKey=" + WebUtility.UrlEncode( profileName ) + "&l=english" );
-			//some strange issue. if profile name was changed recently search wont return it in group memebers. in this case we gonna perform full search
-			var membersPerPage = 51;
-			var pagesQty = ( clanMembers.Count + membersPerPage + 1 ) / membersPerPage;
-			for (int i = 1; i <= pagesQty; i++ ) {
-				//http://steamcommunity.com/groups/PUSY_KATS_LOUNGE/members/?p=5
-				pages.Add( SteamCommunityURL + "/gid/" + Bot.BotConfig.SteamMasterClanID + "/members/?p=" + i );
-			}
-			foreach ( var pageUrl in pages ) {
-				HtmlDocument htmlDocument = null;
-				for ( byte i = 0; i < WebBrowser.MaxRetries && htmlDocument == null; i++ ) {
-					htmlDocument = await WebBrowser.UrlGetToHtmlDocument( pageUrl, Cookie ).ConfigureAwait( false );
-				}
-
-				if ( htmlDocument == null ) {
-					Logging.LogGenericWTF( "Request failed even after " + WebBrowser.MaxRetries + " tries", Bot.BotName );
-					return rank;
-				}
-				//getting rank			
-				var memberBlocks = htmlDocument.DocumentNode.SelectSingleNode( "//div[@id='memberList']" );
-				foreach ( var memberBlockNode in memberBlocks.ChildNodes ) {
-					uint steamID3;
-					if ( memberBlockNode.Name != "div"
-						|| memberBlockNode.Attributes["data-miniprofile"] == null
-						|| !uint.TryParse( memberBlockNode.Attributes["data-miniprofile"].Value, out steamID3 ) ) {
-						continue;
-					}
-					if ( steamID3 != profileID.AccountID ) {
-						continue;
-					}
-					var rankNode = memberBlockNode.SelectSingleNode( "div[@class='rank_icon']" );
-					if ( rankNode == null ) {
-						return rank;
-					}
-					string rankTitle = rankNode.Attributes["title"].Value;
-					switch ( rankTitle ) {
-						case "Group Owner": rank = Bot.EClanRank.Owner; break;
-						case "Group Officer": rank = Bot.EClanRank.Officer; break;
-						case "Group Moderator": rank = Bot.EClanRank.Moderator; break;
-						default: rank = Bot.EClanRank.Member; break;
-					}
-					return rank;
-				}
-			}									
-			return Bot.EClanRank.Unknown;
-		}
-		
 		private async Task UnlockParentalAccount(string parentalPin) {
 			if (string.IsNullOrEmpty(parentalPin) || parentalPin.Equals("0")) {
 				return;

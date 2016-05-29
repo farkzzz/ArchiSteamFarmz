@@ -40,7 +40,8 @@ namespace ArchiSteamFarm {
 		private const byte MaxConnections = 10; // Defines maximum number of connections per ServicePoint. Be careful, as it also defines maximum number of sockets in CLOSE_WAIT state
 		private const byte MaxIdleTime = 15; // In seconds, how long socket is allowed to stay in CLOSE_WAIT state after there are no connections to it
 
-		private static readonly string DefaultUserAgent = "ArchiSteamFarm/" + Program.Version;
+		//bs bez paleva
+		private static readonly string DefaultUserAgent = "Mozilla/5.0 (Windows; U; Windows NT 6.2; en-US; Valve Steam GameOverlay/1461972496; ) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.110 Safari/537.36";
 		private static readonly HttpClient HttpClient = new HttpClient(new HttpClientHandler {
 			UseCookies = false
 		}) {
